@@ -1,0 +1,114 @@
+@startuml Vision Shepherd System
+
+' Abstract base classes and interfaces
+package "Models" {
+    abstract class BaseModel {
+        - device: str
+        - model: Any
+        + __init__(model_path: str, device: str)
+        + load_model()
+        + preprocess(image: np.ndarray): torch.Tensor
+        + postprocess(output: Any): Dict
+    }
+
+    abstract class DetectionModel {
+        - confidence_threshold: float
+        - nms_threshold: float
+        + detect(image: np.ndarray): List[Detection]
+    }
+
+    abstract class SegmentationModel {
+        + segment(image: np.ndarray): List[Mask]
+    }
+
+    abstract class CaptioningModel {
+        + generate_caption(image: np.ndarray): str
+        + classify(image: np.ndarray, labels: List[str]): Dict[str, float]
+    }
+
+    abstract class DepthModel {
+        + estimate_depth(image: np.ndarray): np.ndarray
+    }
+
+    ' Concrete implementations
+    class YOLO {
+        - confidence_threshold: float
+        - nms_threshold: float
+        + detect(image: np.ndarray): List[Detection]
+    }
+
+    class SAM {
+        - points_per_side: int
+        - pred_iou_thresh: float
+        + segment(image: np.ndarray): List[Mask]
+        - _generate_points(): np.ndarray
+    }
+
+    class CLIP {
+        - text_encoder: TextEncoder
+        - image_encoder: ImageEncoder
+        + classify(image: np.ndarray, labels: List[str]): Dict[str, float]
+        + encode_image(image: np.ndarray): Vector
+        + encode_text(text: str): Vector
+    }
+
+    class DAN {
+        + estimate_depth(image: np.ndarray): np.ndarray
+    }
+}
+
+' Database component
+class Database {
+    + store_object(embedding: np.ndarray, position: np.ndarray, metadata: Dict): bool
+    + retrieve_objects(query: Dict): List[Dict]
+    + check_object_exists(position: np.ndarray, embedding: np.ndarray): Tuple[bool, str]
+}
+
+' Main Shepherd class
+class Shepherd {
+    - detector: DetectionModel
+    - segmenter: SegmentationModel
+    - captioner: CaptioningModel
+    - depth_estimator: Optional[DepthModel]
+    - database: Database
+    - device: str
+    - config: Configuration
+    
+    + __init__(config: Dict, database: Database)
+    + process_frame(image: np.ndarray, position: np.ndarray
+    + update_config(config: Dict)
+    + get_object_map(): Dict
+    - _validate_models()
+    - _process_detections(image: np.ndarray): List[np.ndarray]
+    - _process_segments(image: np.ndarray, detections: List[np.ndarray]): List[Mask]
+    - _process_captions(image: np.ndarray, detections: List[np.ndarray]): List[str]
+    - _estimate_depths(image: np.ndarray): Optional[np.ndarray]
+}
+' Configuration
+class Configuration {
+    + model_paths: Dict[str, str]
+    + thresholds: Dict[str, float]
+    + device: str
+    + resolution: Tuple[int, int]
+}
+
+' Relationships
+BaseModel <|-- DetectionModel
+BaseModel <|-- SegmentationModel
+BaseModel <|-- CaptioningModel
+BaseModel <|-- DepthModel
+
+DetectionModel <|.. YOLO
+SegmentationModel <|.. SAM
+DepthModel <|.. DAN
+CaptioningModel <|.. CLIP
+
+Shepherd o-- DetectionModel
+Shepherd o-- SegmentationModel
+Shepherd o-- CaptioningModel
+Shepherd o-- DepthModel
+Shepherd o-- Database
+
+Configuration o-- Shepherd
+
+@enduml

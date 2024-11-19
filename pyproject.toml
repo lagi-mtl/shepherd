@@ -1,0 +1,12 @@
+    # pyproject.toml
+    [build-system]
+    requires = ["setuptools>=45", "wheel"]
+    build-backend = "setuptools.build_meta"
+
+    [project]
+    name = "shepherd"
+    version = "0.1.0"
+    description = "Shepherd is a 3D visual object mapping system for robots querying."
+    requires-python = ">=3.8"
+    dependencies = [
+    ]
