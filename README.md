@@ -1,6 +1,6 @@
 # Shepherd
 
-Shepherd is a 3D visual object mapping system for robots querying.
+Shepherd is a 3D visual object mapping system for robot querying.
 
 ## Documentation
 
