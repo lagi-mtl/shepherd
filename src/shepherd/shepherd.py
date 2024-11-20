@@ -61,7 +61,7 @@ class Shepherd:
             
         self._validate_models()
         
-    def process_frame(self, frame: np.ndarray, depth_frame: Optional[np.ndarray] = None):
+    def process_frame(self, frame: np.ndarray, depth_frame: Optional[np.ndarray] = None, camera_pose: Optional[Dict] = None):
         """Process a single frame through the vision pipeline."""
         # Run detection
         detections = self._process_detections(frame)
@@ -76,8 +76,11 @@ class Shepherd:
         # Process each detection
         results = []
         for detection, mask in zip(detections, masks):
-            # Get object region using mask
-            masked_region = cv2.bitwise_and(frame, frame, mask=mask.astype(np.uint8))
+            # Get bounding box coordinates from mask
+            x, y, w, h = cv2.boundingRect(mask.astype(np.uint8))
+
+            # Extract region using bounding box
+            masked_region = frame[y:y+h, x:x+w]
             
             # Get caption and embedding
             caption = self._process_captions(masked_region)
@@ -86,23 +89,23 @@ class Shepherd:
             # Get depth information and create point cloud
             depth_info = None
             point_cloud = None
-            if depth_frame is not None:
-                depth_info = self._get_depth_info(mask, depth_frame)
-                point_cloud = self._create_point_cloud(mask, depth_frame)
+
+            depth_info = self._get_depth_info(mask, depth_frame)
+            point_cloud = self._create_point_cloud(mask, depth_frame)
             
-            # Store in database
+            # Store in database (point cloud transformation happens here)
             metadata = {
                 'caption': caption,
                 'class_id': detection.get('class_id', 0),
                 'confidence': detection['confidence'],
                 'depth_info': depth_info,
-                'mask': mask.tolist()  # Store mask for visualization
             }
             
             self.database.store_object(
                 embedding=embedding,
                 metadata=metadata,
-                point_cloud=point_cloud
+                point_cloud=point_cloud,
+                camera_pose=camera_pose
             )
             
             results.append({
@@ -110,8 +113,7 @@ class Shepherd:
                 'mask': mask,
                 'caption': caption,
                 'embedding': embedding,
-                'depth_info': depth_info,
-                'point_cloud': point_cloud
+                'depth_info': depth_info
             })
             
         return results
@@ -164,7 +166,7 @@ class Shepherd:
         }
         
     def _create_point_cloud(self, mask: np.ndarray, depth_frame: np.ndarray) -> np.ndarray:
-        """Create point cloud from mask and depth frame."""
+        """Create point cloud from mask and depth frame using camera parameters."""
         # Get image dimensions
         height, width = depth_frame.shape
         
@@ -185,9 +187,9 @@ class Shepherd:
         y = y[valid_depths]
         z = z[valid_depths]
         
-        # Convert to 3D coordinates
-        X = (x - width/2) * z / 500  # Using approximate focal length
-        Y = (y - height/2) * z / 500
+        # Convert to 3D coordinates using camera parameters
+        X = (x - self.config.camera.cx) * z / self.config.camera.fx
+        Y = (y - self.config.camera.cy) * z / self.config.camera.fy
         Z = z
         
         # Stack coordinates
