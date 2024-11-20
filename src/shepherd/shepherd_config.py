@@ -33,6 +33,9 @@ class ShepherdConfig:
             'yolo': str(self.model_dir / 'yolov8s-world.pt'),
             'sam': str(self.model_dir / 'FastSAM-s.pt'),
         }
+
+        # Use caption for object description
+        self.use_caption = True
         
         # Model-specific parameters
         self.thresholds = {
