@@ -48,41 +48,6 @@ class CameraUtils:
         # Combined camera rotation matrix
         self.camera_rotation = self.Rz_180 @ self.Rz @ self.Rx
         
-    def pixel_to_camera(self, x: float, y: float, depth: float) -> np.ndarray:
-        """Convert pixel coordinates and depth to camera coordinates."""
-        # Convert from image to camera coordinates
-        # Camera coordinate system: X right, Y down, Z forward
-        Z = depth
-        X = (x - self.cx) * Z / self.fx
-        Y = (y - self.cy) * Z / self.fy
-        
-        return np.array([X, Y, Z])
-        
-    def camera_to_world(self, point: np.ndarray, camera_pose: Dict) -> np.ndarray:
-        """Transform point from camera to world coordinates."""
-        # Apply camera rotation
-        rotated = self.camera_rotation @ point
-        
-        # Add camera offset
-        camera_offset = np.array([0.1, 0, self.camera_height])  # x-offset, z-height
-        transformed = rotated + camera_offset
-        
-        # Apply camera pose transformation if provided
-        if camera_pose:
-            # Create rotation matrix from quaternion
-            qx, qy, qz, qw = camera_pose['qx'], camera_pose['qy'], camera_pose['qz'], camera_pose['qw']
-            R = np.array([
-                [1 - 2*qy*qy - 2*qz*qz, 2*qx*qy - 2*qz*qw, 2*qx*qz + 2*qy*qw],
-                [2*qx*qy + 2*qz*qw, 1 - 2*qx*qx - 2*qz*qz, 2*qy*qz - 2*qx*qw],
-                [2*qx*qz - 2*qy*qw, 2*qy*qz + 2*qx*qw, 1 - 2*qx*qx - 2*qy*qy]
-            ])
-            
-            # Apply rotation and translation
-            t = np.array([camera_pose['x'], camera_pose['y'], camera_pose['z']])
-            transformed = R @ transformed + t
-            
-        return transformed
-        
     def transform_point_cloud(self, points: np.ndarray, camera_pose: Dict) -> np.ndarray:
         """Transform entire point cloud from camera to world coordinates."""
         # Apply camera rotation to all points

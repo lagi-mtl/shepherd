@@ -89,27 +89,6 @@ class DatabaseWrapper:
             print(f"Error in point cloud cleaning: {e}")
             return point_cloud
 
-    def _is_occluded(self, camera_pos: np.ndarray, point: np.ndarray, 
-                     obstacle: np.ndarray, threshold: float = 0.1) -> bool:
-        """Check if a point is occluded by an obstacle from camera perspective."""
-        # Vector from camera to point
-        dir_to_point = point - camera_pos
-        dist_to_point = np.linalg.norm(dir_to_point)
-        dir_to_point = dir_to_point / dist_to_point
-
-        # Vector from camera to obstacle
-        dir_to_obstacle = obstacle - camera_pos
-        dist_to_obstacle = np.linalg.norm(dir_to_obstacle)
-        dir_to_obstacle = dir_to_obstacle / dist_to_obstacle
-
-        # If obstacle is further than point, it can't occlude
-        if dist_to_obstacle > dist_to_point:
-            return False
-
-        # Check if directions are similar (potential occlusion)
-        angle = np.arccos(np.clip(np.dot(dir_to_point, dir_to_obstacle), -1.0, 1.0))
-        return angle < threshold
-
     def _process_new_detection(self, point_cloud: np.ndarray, embedding: np.ndarray, 
                               camera_pose: Dict) -> Tuple[np.ndarray, np.ndarray]:
         """Process new detection with DBSCAN clustering and pose transformation."""
@@ -224,31 +203,6 @@ class DatabaseWrapper:
         except Exception as e:
             print(f"Error in finding nearby object: {e}")
             return None
-
-    def _calculate_bbox_overlap(self, bbox1: Tuple[np.ndarray, np.ndarray], 
-                              bbox2: Tuple[np.ndarray, np.ndarray]) -> float:
-        """Calculate overlap between two 3D bounding boxes."""
-        min1, max1 = bbox1
-        min2, max2 = bbox2
-        
-        # Calculate intersection
-        intersection_min = np.maximum(min1, min2)
-        intersection_max = np.minimum(max1, max2)
-        
-        if np.any(intersection_max < intersection_min):
-            return 0.0
-        
-        # Calculate volumes
-        intersection_volume = np.prod(intersection_max - intersection_min)
-        volume1 = np.prod(max1 - min1)
-        volume2 = np.prod(max2 - min2)
-        
-        # Calculate IoU (Intersection over Union)
-        union_volume = volume1 + volume2 - intersection_volume
-        if union_volume <= 0:
-            return 0.0
-        
-        return intersection_volume / union_volume
 
     def _merge_point_clouds(self, cloud1: np.ndarray, cloud2: np.ndarray,
                            voxel_size: float = 0.05) -> np.ndarray:
@@ -526,51 +480,6 @@ class DatabaseWrapper:
                     {"dummy": "3"}
                 ]
             )
-
-    def _create_point_cloud(self, mask: np.ndarray, depth_frame: np.ndarray) -> np.ndarray:
-        """Create point cloud from mask and depth frame."""
-        # Get image dimensions
-        height, width = depth_frame.shape
-        
-        # Create meshgrid of pixel coordinates
-        xx, yy = np.meshgrid(np.arange(width), np.arange(height))
-        
-        # Apply mask
-        valid_points = mask > 0
-        
-        # Get valid coordinates and depths
-        x = xx[valid_points]
-        y = yy[valid_points]
-        z = depth_frame[valid_points]
-        
-        # Filter out invalid depths
-        valid_depths = z > 0.1
-        x = x[valid_depths]
-        y = y[valid_depths]
-        z = z[valid_depths]
-        
-        # Convert to 3D coordinates using camera parameters
-        # Note: These should match the camera parameters in ShepherdConfig
-        fx = 1344 / (2 * np.tan(1.88 / 2))  # width/(2*tan(fov/2))
-        fy = fx
-        cx = 1344 / 2
-        cy = 376 / 2
-        
-        X = (x - cx) * z / fx
-        Y = (y - cy) * z / fy
-        Z = z
-        
-        # Stack coordinates
-        points = np.stack([X, Y, Z], axis=1)
-        
-        # Remove outliers
-        if len(points) > 0:
-            mean = np.mean(points, axis=0)
-            std = np.std(points, axis=0)
-            valid_points = np.all(np.abs(points - mean) <= 2 * std, axis=1)
-            points = points[valid_points]
-        
-        return points
 
     def update_query(self, query_embedding: Optional[np.ndarray]):
         """Update the query embedding used for similarity computations."""

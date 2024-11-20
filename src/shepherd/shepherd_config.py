@@ -39,13 +39,13 @@ class ShepherdConfig:
         
         # Model-specific parameters
         self.thresholds = {
-            'detection': 0.4,
+            'detection': 0.25,
             'nms': 0.45
         }
         
         self.sam_params = {
             'points_per_side': 32,
-            'pred_iou_thresh': 0.88
+            'pred_iou_thresh': 0.8
         }
         
         # General settings

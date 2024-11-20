@@ -8,7 +8,7 @@ from .database_wrapper import DatabaseWrapper
 from .shepherd_config import ShepherdConfig
 
 class Shepherd:
-    def __init__(self, config : ShepherdConfig = None, database: DatabaseWrapper = None):
+    def __init__(self, config : ShepherdConfig|None = None, database: DatabaseWrapper|None = None):
         """
         Initialize the Shepherd class with all required models and configurations.
         
@@ -87,7 +87,7 @@ class Shepherd:
         
     def process_frame(self, frame: np.ndarray, depth_frame: Optional[np.ndarray] = None, camera_pose: Optional[Dict] = None):
         """Process a single frame through the vision pipeline."""
-        # Run detection
+        # Run detection with lower confidence threshold for more detections
         detections = self._process_detections(frame)
         
         # Get segmentation masks for detections
@@ -96,61 +96,76 @@ class Shepherd:
         # If no depth frame provided, estimate it using DAN
         if depth_frame is None and self.depth_estimator is not None:
             depth_frame = self.depth_estimator.estimate_depth(frame)
+            # Normalize depth values to a reasonable range (e.g. 0.1 to 10 meters)
+            if depth_frame is not None:
+                depth_frame = np.clip(depth_frame, 0.1, 10.0)
         
         # Process each detection
         results = []
         for detection, mask in zip(detections, masks):
             # Get bounding box coordinates from mask
             x, y, w, h = cv2.boundingRect(mask.astype(np.uint8))
+            
+            # Ensure minimum size for processing
+            if w < 10 or h < 10:
+                continue
 
-            # Extract region using bounding box
-            masked_region = frame[y:y+h, x:x+w]
+            # Extract region using bounding box with padding
+            pad = 10  # Add padding pixels
+            y1 = max(0, y-pad)
+            y2 = min(frame.shape[0], y+h+pad)
+            x1 = max(0, x-pad)
+            x2 = min(frame.shape[1], x+w+pad)
+            masked_region = frame[y1:y2, x1:x2]
             
             # Get caption and embedding
             if self.config.use_caption:
                 caption = self._process_captions(masked_region)
             else:
                 caption = None
-                
+            
             embedding = self.embedder.encode_image(masked_region)
             
             # Get depth information and create point cloud
             depth_info = None
             point_cloud = None
             if depth_frame is not None:
+                # Use the full mask for depth processing
                 depth_info = self._get_depth_info(mask, depth_frame)
                 point_cloud = self._create_point_cloud(mask, depth_frame)
             
-            # Create metadata
-            metadata = {
-                'caption': caption,
-                'class_id': detection.get('class_id', 0),
-                'confidence': detection['confidence'],
-                'depth_info': depth_info,
-            }
-            
-            # Store in database and get object ID
-            object_id = self.database.store_object(
-                embedding=embedding,
-                metadata=metadata,
-                point_cloud=point_cloud,
-                camera_pose=camera_pose,
-                mask=mask
-            )
-            
-            # Get similarity from metadata if it exists
-            similarity = metadata.get('query_similarity')
-            
-            results.append({
-                'detection': detection,
-                'mask': mask,
-                'caption': caption,
-                'embedding': embedding,
-                'depth_info': depth_info,
-                'object_id': object_id,
-                'similarity': similarity
-            })
-            
+            # Only process if we have valid point cloud data
+            if point_cloud is not None and len(point_cloud) > 10:  # Require minimum points
+                # Create metadata
+                metadata = {
+                    'caption': caption,
+                    'class_id': detection.get('class_id', 0),
+                    'confidence': detection['confidence'],
+                    'depth_info': depth_info,
+                }
+                
+                # Store in database and get object ID
+                object_id = self.database.store_object(
+                    embedding=embedding,
+                    metadata=metadata,
+                    point_cloud=point_cloud,
+                    camera_pose=camera_pose,
+                    mask=mask
+                )
+                
+                # Get similarity from metadata if it exists
+                similarity = metadata.get('query_similarity')
+                
+                results.append({
+                    'detection': detection,
+                    'mask': mask,
+                    'caption': caption,
+                    'embedding': embedding,
+                    'depth_info': depth_info,
+                    'object_id': object_id,
+                    'similarity': similarity
+                })
+                
         return results
         
     def _validate_models(self):

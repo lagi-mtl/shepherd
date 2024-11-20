@@ -5,6 +5,7 @@ from shepherd.utils.visualization import VisualizationUtils
 def main():
     # Create config with default model directory
     config = ShepherdConfig()
+    config.thresholds['detection'] = 0.1
     viz = VisualizationUtils()
     
     # Initialize Shepherd
