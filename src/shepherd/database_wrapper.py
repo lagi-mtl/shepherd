@@ -3,9 +3,10 @@ import chromadb
 from typing import Dict, List, Tuple, Optional
 import torch
 from sklearn.neighbors import NearestNeighbors
+from .utils.camera import CameraUtils
 
 class DatabaseWrapper:
-    def __init__(self, collection_name: str = "detection_embeddings"):
+    def __init__(self, collection_name: str = "detection_embeddings", camera_utils: Optional[CameraUtils] = None):
         """Initialize database wrapper with ChromaDB."""
         self.chroma_client = chromadb.Client()
         self.collection = self.chroma_client.create_collection(
@@ -14,6 +15,7 @@ class DatabaseWrapper:
         )
         self.initialize_collection()
         self.point_clouds = {}  # Store point clouds in memory
+        self.camera = camera_utils if camera_utils is not None else CameraUtils()
         
     def store_object(self, embedding: np.ndarray, metadata: Dict, 
                     point_cloud: Optional[np.ndarray] = None,
@@ -22,8 +24,9 @@ class DatabaseWrapper:
         if camera_pose is None:
             camera_pose = {'x': 0, 'y': 0, 'z': 0, 'qx': 0, 'qy': 0, 'qz': 0, 'qw': 1}
             
-        # Transform point cloud to world coordinates if camera pose provided
-        point_cloud = self._transform_to_world(point_cloud, camera_pose)
+        # Transform point cloud to world coordinates using camera utils
+        if point_cloud is not None and len(point_cloud) > 0:
+            point_cloud = self.camera.transform_point_cloud(point_cloud, camera_pose)
             
         # Check for nearby objects
         nearby_id = self._find_nearby_object(point_cloud, embedding)
@@ -103,7 +106,6 @@ class DatabaseWrapper:
         )
         
         old_embedding = np.array(results['embeddings'][0])
-        old_metadata = results['metadatas'][0]
         old_point_cloud = self.point_clouds.get(existing_id, np.array([]))
         
         # Merge point clouds with voxelization and occlusion handling
@@ -159,58 +161,6 @@ class DatabaseWrapper:
             points = points[valid_points]
             
         return points
-
-    def _transform_to_world(self, points: np.ndarray, camera_pose: Dict) -> np.ndarray:
-        """Transform points from camera to world coordinates."""
-        if points is None or len(points) == 0:
-            return np.array([])
-        
-        # First apply camera rotation (pitch)
-        Rx = np.array([  # Pitch rotation (-90 degrees)
-            [1, 0, 0],
-            [0, 0, 1],
-            [0, -1, 0]
-        ])
-        
-        # Then rotate -90° around Z (yaw)
-        Rz = np.array([
-            [0, -1, 0],
-            [1, 0, 0],
-            [0, 0, 1]
-        ])
-        
-        # Additional 180° rotation around Z
-        Rz_180 = np.array([
-            [-1, 0, 0],
-            [0, -1, 0],
-            [0, 0, 1]
-        ])
-        
-        # Combined camera rotation
-        camera_rotation = Rz_180 @ Rz @ Rx
-        
-        # Apply camera rotation to all points
-        rotated = (camera_rotation @ points.T).T
-        
-        # Add camera offset
-        camera_offset = np.array([0.1, 0, 0.4])  # x-offset, z-height
-        transformed = rotated + camera_offset
-        
-        # Apply robot pose transformation if provided
-        if camera_pose:
-            # Create rotation matrix from quaternion
-            qx, qy, qz, qw = camera_pose['qx'], camera_pose['qy'], camera_pose['qz'], camera_pose['qw']
-            R = np.array([
-                [1 - 2*qy*qy - 2*qz*qz, 2*qx*qy - 2*qz*qw, 2*qx*qz + 2*qy*qw],
-                [2*qx*qy + 2*qz*qw, 1 - 2*qx*qx - 2*qz*qz, 2*qy*qz - 2*qx*qw],
-                [2*qx*qz - 2*qy*qw, 2*qy*qz + 2*qx*qw, 1 - 2*qx*qx - 2*qy*qy]
-            ])
-            
-            # Apply rotation and translation
-            t = np.array([camera_pose['x'], camera_pose['y'], camera_pose['z']])
-            transformed = (R @ transformed.T).T + t
-            
-        return transformed
 
     def query_objects(self, query_text: str, clip_model = None) -> List[Dict]:
         """Query objects in database using text query."""

@@ -20,7 +20,7 @@ class Shepherd:
             config = ShepherdConfig()
             
         if database is None:
-            database = DatabaseWrapper()
+            database = DatabaseWrapper(camera_utils=config.camera)
 
         self.config = config
         self.device = config.get('device', "cuda" if torch.cuda.is_available() else "cpu")
