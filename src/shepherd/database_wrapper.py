@@ -127,14 +127,14 @@ class DatabaseWrapper:
             return np.array([]), embedding
 
     def _compute_geometric_similarity(self, points1: np.ndarray, points2: np.ndarray, 
-                                    nn_threshold: float = 0.1) -> float:
+                                    nn_threshold: float = 0.01) -> float:
         """Compute geometric similarity using nearest neighbor ratio."""
         if len(points1) == 0 or len(points2) == 0:
             return 0.0
         
         try:
             # Build KD-tree for second point cloud
-            tree = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(points2)
+            tree = NearestNeighbors(n_neighbors=5, algorithm='ball_tree').fit(points2)
             
             # Find nearest neighbors for all points in first cloud
             distances, _ = tree.kneighbors(points1)
@@ -318,7 +318,7 @@ class DatabaseWrapper:
             # Remove duplicates and outliers
             if len(combined_cloud) > 0:
                 # Voxelize to remove duplicates
-                voxel_size = 0.05  # 5cm voxels
+                voxel_size = 0.01  # 5cm voxels
                 voxel_dict = {}
                 for point in combined_cloud:
                     voxel_key = tuple(np.round(point / voxel_size))

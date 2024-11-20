@@ -11,12 +11,6 @@ Shepherd is a 3D visual object mapping system for robot querying.
 ## Installation
 
 ```bash
+pip install -r requirements.txt
 pip install -e .
-```
-
-## ROS2
-
-```bash
-colcon build --packages-select shepherd_ros2
-ros2 run shepherd_ros2 shepherd
 ```
