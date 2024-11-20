@@ -21,13 +21,12 @@ package "Shepherd" {
     [Depth estimation (DAN, Optional)] as dan
     [Image-text similarity (CLIP)] as clip
     [World manipulator] as coord_transform
-    [BLIP] as blip
+    [Image captioning (BLIP)] as blip
     
     ' Databases    
     database "DB" as db
 
     ' Data interfaces
-    interface "bounding boxes" as bbox_if
     interface "image depth map" as depth_map_if
     interface "masks" as mask_if
     interface "cropped images" as cropped_images_if
@@ -43,8 +42,7 @@ raw_img --> yolo
 raw_img --> dan
 dan --> depth_map_if
 depth_img --> depth_map_if
-yolo --> bbox_if
-bbox_if --> fast_sam
+yolo --> fast_sam : bounding boxes
 fast_sam --> mask_if
 raw_img -right-> cropped_images_if
 mask_if --> cropped_images_if
