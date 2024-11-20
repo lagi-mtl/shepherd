@@ -127,12 +127,7 @@ class Shepherd:
             embedding = self.embedder.encode_image(masked_region)
             
             # Get depth information and create point cloud
-            depth_info = None
-            point_cloud = None
-            if depth_frame is not None:
-                # Use the full mask for depth processing
-                depth_info = self._get_depth_info(mask, depth_frame)
-                point_cloud = self._create_point_cloud(mask, depth_frame)
+            point_cloud = self._create_point_cloud(mask, depth_frame)
             
             # Only process if we have valid point cloud data
             if point_cloud is not None and len(point_cloud) > 10:  # Require minimum points
@@ -141,7 +136,6 @@ class Shepherd:
                     'caption': caption,
                     'class_id': detection.get('class_id', 0),
                     'confidence': detection['confidence'],
-                    'depth_info': depth_info,
                 }
                 
                 # Store in database and get object ID
@@ -161,7 +155,7 @@ class Shepherd:
                     'mask': mask,
                     'caption': caption,
                     'embedding': embedding,
-                    'depth_info': depth_info,
+                    'depth_frame': depth_frame,
                     'object_id': object_id,
                     'similarity': similarity
                 })
@@ -200,23 +194,9 @@ class Shepherd:
         # Crop image to bounding box
         cropped = image[y_min:y_max, x_min:x_max]
         return cropped
-
-    def _get_depth_info(self, mask: np.ndarray, depth_frame: np.ndarray) -> Dict:
-        """Get depth statistics for masked region."""
-        masked_depth = depth_frame[mask]
-        if len(masked_depth) == 0:
-            return None
-            
-        return {
-            'min_depth': float(np.min(masked_depth)),
-            'max_depth': float(np.max(masked_depth)),
-            'mean_depth': float(np.mean(masked_depth)),
-            'median_depth': float(np.median(masked_depth)),
-            'depth_map': depth_frame
-        }
         
     def _create_point_cloud(self, mask: np.ndarray, depth_frame: np.ndarray) -> np.ndarray:
-        """Create point cloud from mask and depth frame using camera parameters."""
+        """Create point cloud from mask and depth frame."""
         # Get image dimensions
         height, width = depth_frame.shape
         

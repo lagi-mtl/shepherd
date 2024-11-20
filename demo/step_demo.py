@@ -33,19 +33,12 @@ def main():
         print(f"  Class: {VisualizationUtils.YOLO_CLASSES.get(int(result['detection'].get('class_id', 0)), 'Unknown')}")
         print(f"  Confidence: {result['detection']['confidence']:.2f}")
         
-        if result['depth_info']:
-            print(f"  Depth Statistics:")
-            print(f"    Min: {result['depth_info']['min_depth']:.2f}m")
-            print(f"    Max: {result['depth_info']['max_depth']:.2f}m")
-            print(f"    Mean: {result['depth_info']['mean_depth']:.2f}m")
-            print(f"    Median: {result['depth_info']['median_depth']:.2f}m")
-
     # Show visualizations
     viz.show_pipeline_step("Final Results", 
                           image,
                           detections=[r['detection'] for r in results],
                           masks=[r['mask'] for r in results],
-                          depth=results[0]['depth_info']['depth_map'] if results and results[0]['depth_info'] else None)
+                          depth=results[0]['depth_frame'])
 
 if __name__ == "__main__":
     main()  
