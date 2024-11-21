@@ -1,10 +1,10 @@
-numpy==1.26.4
-torch==2.5.1
+numpy==1.24.4
+torch==2.4.1
 opencv-python==4.10.0.84
 matplotlib==3.5.1
 open3d==0.18.0
 transformers==4.46.2
 ultralytics==8.3.32
 chromadb==0.5.18
-scikit-learn==1.5.2
-clip @ git+https://github.com/openai/CLIP.git
+scikit-learn==1.3.2
+git+https://github.com/openai/CLIP.git

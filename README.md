@@ -32,3 +32,11 @@ This demo runs each step of the pipeline in sequence so that you can see the int
 ```bash
 python demo/step_demo.py
 ```
+
+### Habitat Demo
+
+This demo runs the Habitat simulator with the Shepherd pipeline. To run this demo, you first need to download the Replica data and place it at the root of the repository. (See the [Meta Repository](https://github.com/facebookresearch/Replica-Dataset))
+
+```bash
+python demo/habitat_demo.py
+```

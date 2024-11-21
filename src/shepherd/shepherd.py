@@ -8,7 +8,7 @@ from .database_wrapper import DatabaseWrapper
 from .shepherd_config import ShepherdConfig
 
 class Shepherd:
-    def __init__(self, config : ShepherdConfig|None = None, database: DatabaseWrapper|None = None):
+    def __init__(self, config : ShepherdConfig = None, database: DatabaseWrapper = None):
         """
         Initialize the Shepherd class with all required models and configurations.
         

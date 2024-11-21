@@ -5,6 +5,8 @@ import torch
 from sklearn.neighbors import NearestNeighbors
 from .utils.camera import CameraUtils
 from sklearn.cluster import DBSCAN
+import open3d as o3d
+import os
 
 class DatabaseWrapper:
     def __init__(self, collection_name: str = "detection_embeddings", 
@@ -420,3 +422,75 @@ class DatabaseWrapper:
     def update_query(self, query_embedding: Optional[np.ndarray]):
         """Update the query embedding used for similarity computations."""
         self.query_embedding = query_embedding
+
+    def save_point_cloud_ply(self, output_path: str):
+        """
+        Save the current point clouds with similarity colors to a PLY file.
+        
+        Args:
+            output_path (str): Path where to save the PLY file
+        """
+        try:
+            # Create output directory if it doesn't exist
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+            
+            # Get all objects
+            results = self.collection.get(include=['metadatas', 'embeddings'])
+            
+            if not results or self.query_embedding is None:
+                return
+            
+            # Collect all points and their similarities
+            all_points = []
+            all_similarities = []
+            
+            # Get all IDs from collection
+            all_ids = [str(i) for i in range(self.collection.count())]
+            
+            for i, (metadata, embedding) in enumerate(zip(results['metadatas'], results['embeddings'])):
+                if metadata is None or any(k.startswith('dummy') for k in metadata.keys()):
+                    continue
+                    
+                # Get current ID
+                current_id = all_ids[i]
+                
+                # Get point cloud
+                point_cloud = self.point_clouds.get(current_id)
+                if point_cloud is not None and len(point_cloud) > 0:
+                    # Compute similarity with query embedding
+                    similarity = self._compute_semantic_similarity(
+                        np.array(embedding),
+                        self.query_embedding
+                    )
+                    
+                    all_points.extend(point_cloud)
+                    all_similarities.extend([similarity] * len(point_cloud))
+            
+            if all_points:
+                # Convert to numpy arrays
+                all_points = np.array(all_points)
+                all_similarities = np.array(all_similarities)
+                
+                # Create Open3D point cloud
+                pcd = o3d.geometry.PointCloud()
+                pcd.points = o3d.utility.Vector3dVector(all_points)
+                
+                # Normalize similarities to [0, 1] range
+                if len(np.unique(all_similarities)) > 1:  # Only normalize if we have different values
+                    min_similarity = np.min(all_similarities)
+                    max_similarity = np.max(all_similarities)
+                    normalized_similarities = (all_similarities - min_similarity) / (max_similarity - min_similarity)
+                else:
+                    normalized_similarities = all_similarities
+                
+                # Map similarity to black-to-red (R=normalized similarity, G=0, B=0)
+                colors = np.column_stack((normalized_similarities, 
+                                        np.zeros_like(normalized_similarities), 
+                                        np.zeros_like(normalized_similarities)))
+                pcd.colors = o3d.utility.Vector3dVector(colors)
+                
+                # Save to PLY file
+                o3d.io.write_point_cloud(output_path, pcd)
+                
+        except Exception as e:
+            print(f'Error saving point cloud to PLY: {str(e)}')
