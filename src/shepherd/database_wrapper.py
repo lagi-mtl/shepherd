@@ -106,7 +106,7 @@ class DatabaseWrapper:
         
         try:
             # Build KD-tree for second point cloud
-            tree = NearestNeighbors(n_neighbors=5, algorithm='ball_tree').fit(points2)
+            tree = NearestNeighbors(n_neighbors=1, algorithm='ball_tree').fit(points2)
             
             # Find nearest neighbors for all points in first cloud
             distances, _ = tree.kneighbors(points1)
@@ -147,12 +147,9 @@ class DatabaseWrapper:
                 # Only compute semantic similarity if there's geometric overlap
                 if geo_sim > 0:
                     # Compute semantic similarity
-                    print(f"Embedding 1: {embedding}, Embedding 2: {stored_embedding}")
-
                     sem_sim = self._compute_semantic_similarity(embedding, np.array(stored_embedding))
                     
                     # Combined similarity score
-                    print(f"Geo: {geo_sim}, Sem: {sem_sim}")
                     total_sim = geo_sim + sem_sim
                     
                     if total_sim > best_similarity:
@@ -236,31 +233,15 @@ class DatabaseWrapper:
             return self._merge_objects(nearby_id, processed_embedding, metadata, cleaned_points)
         else:
             # Add new object
-            flat_metadata = self._flatten_metadata(metadata)
             new_id = str(self.collection.count() if self.collection.count() is not None else 0)
             
             self.point_clouds[new_id] = cleaned_points
             self.collection.add(
                 embeddings=[processed_embedding.tolist()],
                 ids=[new_id],
-                metadatas=[flat_metadata]
+                metadatas=[metadata]
             )
             return new_id
-
-    def _flatten_metadata(self, metadata: Dict) -> Dict:
-        """Flatten nested metadata structure for ChromaDB storage."""
-        flat_metadata = {}
-        
-        for key, value in metadata.items():
-            if isinstance(value, dict):
-                # For nested dictionaries (like depth_info), flatten with prefix
-                for sub_key, sub_value in value.items():
-                    if sub_key != 'depth_map':  # Skip depth map
-                        flat_metadata[f"{key}_{sub_key}"] = str(sub_value)
-            elif key != 'mask':  # Skip mask as it's too large
-                flat_metadata[key] = str(value)
-                
-        return flat_metadata
 
     def _merge_objects(self, existing_id: str, new_embedding: np.ndarray,
                       new_metadata: Dict, new_point_cloud: np.ndarray) -> str:
@@ -311,14 +292,11 @@ class DatabaseWrapper:
         avg_embedding = (old_embedding * weight_old + new_embedding * weight_new)
         avg_embedding = avg_embedding / np.linalg.norm(avg_embedding)
         
-        # Update metadata
-        flat_metadata = self._flatten_metadata(new_metadata)
-        
         # Update in database
         self.collection.update(
             ids=[existing_id],
             embeddings=[avg_embedding.tolist()],
-            metadatas=[flat_metadata]
+            metadatas=[new_metadata]
         )
         
         # Update point cloud
@@ -395,7 +373,7 @@ class DatabaseWrapper:
         return query_results
 
     def _compute_semantic_similarity(self, embedding1: np.ndarray, embedding2: np.ndarray, 
-                          normalize_output: bool = False) -> float:
+                          normalize_output: bool = True) -> float:
         """Compute cosine similarity between embeddings."""
 
         # Convert to numpy arrays if needed
@@ -418,8 +396,6 @@ class DatabaseWrapper:
         embedding2 = embedding2 / norm2
         
         similarity = float(np.dot(embedding1, embedding2))
-        
-        print(f"Similarity: {similarity}")
 
         # Optionally normalize to [0,1]
         if normalize_output:

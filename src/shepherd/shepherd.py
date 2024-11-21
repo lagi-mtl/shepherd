@@ -196,6 +196,7 @@ class Shepherd:
         
     def _create_point_cloud(self, mask: np.ndarray, depth_frame: np.ndarray) -> np.ndarray:
         """Create point cloud from mask and depth frame."""
+        
         # Get image dimensions
         height, width = depth_frame.shape
         
@@ -211,11 +212,14 @@ class Shepherd:
         z = depth_frame[valid_points]
         
         # Filter out invalid depths
-        valid_depths = z > 0.1
+        valid_depths = np.logical_and(z > 0.1, np.isfinite(z))
         x = x[valid_depths]
         y = y[valid_depths]
         z = z[valid_depths]
-        
+
+        if len(z) == 0:
+            return np.array([])
+
         # Convert to 3D coordinates using camera parameters
         X = (x - self.config.camera.cx) * z / self.config.camera.fx
         Y = (y - self.config.camera.cy) * z / self.config.camera.fy
@@ -226,9 +230,9 @@ class Shepherd:
         
         # Remove outliers
         if len(points) > 0:
-            mean = np.mean(points, axis=0)
-            std = np.std(points, axis=0)
-            valid_points = np.all(np.abs(points - mean) <= 2 * std, axis=1)
+            median = np.median(points, axis=0)
+            mad = np.median(np.abs(points - median), axis=0)
+            valid_points = np.all(np.abs(points - median) <= 3 * mad, axis=1)
             points = points[valid_points]
         
         return points
