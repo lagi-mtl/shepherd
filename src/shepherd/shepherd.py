@@ -233,34 +233,3 @@ class Shepherd:
         
         return points
         
-    def _compute_similarity(self, embedding1: np.ndarray, embedding2: np.ndarray) -> float:
-        """Compute cosine similarity between two embeddings."""
-        try:
-            if embedding1 is None or embedding2 is None:
-                return 0.0
-            
-            # Convert to numpy arrays if needed
-            if isinstance(embedding1, torch.Tensor):
-                embedding1 = embedding1.detach().cpu().numpy()
-            if isinstance(embedding2, torch.Tensor):
-                embedding2 = embedding2.detach().cpu().numpy()
-            
-            embedding1 = np.array(embedding1)
-            embedding2 = np.array(embedding2)
-            
-            # Ensure embeddings are normalized
-            norm1 = np.linalg.norm(embedding1)
-            norm2 = np.linalg.norm(embedding2)
-            
-            if norm1 == 0 or norm2 == 0:
-                return 0.0
-            
-            embedding1 = embedding1 / norm1
-            embedding2 = embedding2 / norm2
-            
-            return float(np.dot(embedding1, embedding2))
-        except Exception as e:
-            print(f"Error in similarity computation: {e}")
-            return 0.0
-        
-        
