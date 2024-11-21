@@ -30,7 +30,7 @@ class DatabaseWrapper:
         self.cluster_min_samples = cluster_min_samples
         
         # Initialize nearest neighbors
-        self.nn = NearestNeighbors(n_neighbors=1, algorithm='ball_tree')
+        self.nn = NearestNeighbors(n_neighbors=3, algorithm='ball_tree')
         self.query_embedding = None  # Add query embedding storage
 
     def _clean_point_cloud(self, point_cloud: np.ndarray, mask: np.ndarray = None, camera_pose: Optional[Dict] = None) -> np.ndarray:
@@ -54,34 +54,6 @@ class DatabaseWrapper:
 
             if len(core_points) == 0:
                 return point_cloud  # Return original if no core points found
-
-            # Line of sight filtering
-            if camera_pose is not None:
-                camera_pos = np.array([camera_pose['x'], camera_pose['y'], camera_pose['z']])
-                
-                # Sort points by distance from camera
-                directions = point_cloud - camera_pos
-                distances = np.linalg.norm(directions, axis=1)
-                sorted_indices = np.argsort(distances)
-                
-                # Keep points that are not occluded
-                valid_points = []
-                for idx in sorted_indices:
-                    point = point_cloud[idx]
-                    direction = directions[idx]
-                    distance = distances[idx]
-                    
-                    # Check if this point is occluded by any previously accepted point
-                    occluded = False
-                    for valid_point in valid_points:
-                        if self._is_occluded(camera_pos, point, valid_point, threshold=0.1):
-                            occluded = True
-                            break
-                    
-                    if not occluded:
-                        valid_points.append(point)
-                
-                point_cloud = np.array(valid_points)
 
             return point_cloud
 
@@ -251,8 +223,7 @@ class DatabaseWrapper:
 
     def store_object(self, embedding: np.ndarray, metadata: Dict, 
                     point_cloud: Optional[np.ndarray] = None,
-                    camera_pose: Optional[Dict] = None,
-                    mask: Optional[np.ndarray] = None) -> Optional[str]:
+                    camera_pose: Optional[Dict] = None) -> Optional[str]:
         """Store a new object or update existing one."""
         if camera_pose is None:
             camera_pose = {'x': 0, 'y': 0, 'z': 0, 'qx': 0, 'qy': 0, 'qz': 0, 'qw': 1}

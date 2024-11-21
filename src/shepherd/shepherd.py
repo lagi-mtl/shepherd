@@ -144,7 +144,6 @@ class Shepherd:
                     metadata=metadata,
                     point_cloud=point_cloud,
                     camera_pose=camera_pose,
-                    mask=mask
                 )
                 
                 # Get similarity from metadata if it exists
