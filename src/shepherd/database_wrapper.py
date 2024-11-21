@@ -10,7 +10,7 @@ class DatabaseWrapper:
     def __init__(self, collection_name: str = "detection_embeddings", 
                  camera_utils: Optional[CameraUtils] = None,
                  distance_threshold: float = 1.5,
-                 similarity_threshold: float = 0.5,
+                 similarity_threshold: float = 1.5,
                  cluster_eps: float = 0.2,
                  cluster_min_samples: int = 3):
         """Initialize database wrapper with ChromaDB."""
@@ -99,7 +99,7 @@ class DatabaseWrapper:
             return np.array([]), embedding
 
     def _compute_geometric_similarity(self, points1: np.ndarray, points2: np.ndarray, 
-                                    nn_threshold: float = 0.01) -> float:
+                                    nn_threshold: float = 0.05) -> float:
         """Compute geometric similarity using nearest neighbor ratio."""
         if len(points1) == 0 or len(points2) == 0:
             return 0.0
@@ -119,16 +119,6 @@ class DatabaseWrapper:
             
         except Exception as e:
             print(f"Error in geometric similarity computation: {e}")
-            return 0.0
-
-    def _compute_semantic_similarity(self, embedding1: np.ndarray, embedding2: np.ndarray) -> float:
-        """Compute normalized cosine similarity between embeddings."""
-        try:
-            similarity = self._compute_similarity(embedding1, embedding2)
-            # Normalize to [0,1] range as per paper
-            return similarity / 2 + 0.5
-        except Exception as e:
-            print(f"Error in semantic similarity computation: {e}")
             return 0.0
 
     def _find_nearby_object(self, point_cloud: np.ndarray, embedding: np.ndarray) -> Optional[str]:
@@ -157,9 +147,12 @@ class DatabaseWrapper:
                 # Only compute semantic similarity if there's geometric overlap
                 if geo_sim > 0:
                     # Compute semantic similarity
+                    print(f"Embedding 1: {embedding}, Embedding 2: {stored_embedding}")
+
                     sem_sim = self._compute_semantic_similarity(embedding, np.array(stored_embedding))
                     
                     # Combined similarity score
+                    print(f"Geo: {geo_sim}, Sem: {sem_sim}")
                     total_sim = geo_sim + sem_sim
                     
                     if total_sim > best_similarity:
@@ -359,7 +352,7 @@ class DatabaseWrapper:
             # Compute similarity if CLIP model provided
             similarity = 0.0
             if clip_model is not None:
-                similarity = self._compute_similarity(
+                similarity = self._compute_semantic_similarity(
                     np.array(embedding),
                     query_embedding
                 )
@@ -401,42 +394,38 @@ class DatabaseWrapper:
         query_results.sort(key=lambda x: x['similarity'], reverse=True)
         return query_results
 
-    def _compute_similarity(self, embedding1: np.ndarray, embedding2: np.ndarray, 
+    def _compute_semantic_similarity(self, embedding1: np.ndarray, embedding2: np.ndarray, 
                           normalize_output: bool = False) -> float:
         """Compute cosine similarity between embeddings."""
-        try:
-            if embedding1 is None or embedding2 is None:
-                return 0.0
-            
-            # Convert to numpy arrays if needed
-            if isinstance(embedding1, torch.Tensor):
-                embedding1 = embedding1.detach().cpu().numpy()
-            if isinstance(embedding2, torch.Tensor):
-                embedding2 = embedding2.detach().cpu().numpy()
-            
-            embedding1 = np.array(embedding1)
-            embedding2 = np.array(embedding2)
-            
-            # Ensure embeddings are normalized
-            norm1 = np.linalg.norm(embedding1)
-            norm2 = np.linalg.norm(embedding2)
-            
-            if norm1 == 0 or norm2 == 0:
-                return 0.0
-            
-            embedding1 = embedding1 / norm1
-            embedding2 = embedding2 / norm2
-            
-            similarity = float(np.dot(embedding1, embedding2))
-            
-            # Optionally normalize to [0,1] range as per paper
-            if normalize_output:
-                similarity = similarity / 2 + 0.5
-                
-            return similarity
-        except Exception as e:
-            print(f"Error in similarity computation: {e}")
+
+        # Convert to numpy arrays if needed
+        if isinstance(embedding1, torch.Tensor):
+            embedding1 = embedding1.detach().cpu().numpy()
+        if isinstance(embedding2, torch.Tensor):
+            embedding2 = embedding2.detach().cpu().numpy()
+        
+        embedding1 = np.array(embedding1)
+        embedding2 = np.array(embedding2)
+        
+        # Ensure embeddings are normalized
+        norm1 = np.linalg.norm(embedding1)
+        norm2 = np.linalg.norm(embedding2)
+
+        if norm1 == 0 or norm2 == 0:
             return 0.0
+        
+        embedding1 = embedding1 / norm1
+        embedding2 = embedding2 / norm2
+        
+        similarity = float(np.dot(embedding1, embedding2))
+        
+        print(f"Similarity: {similarity}")
+
+        # Optionally normalize to [0,1]
+        if normalize_output:
+            similarity = similarity / 2 + 0.5
+            
+        return similarity
 
     def initialize_collection(self): # TODO: Fix this to not use dummy vectors
         """Initialize collection with dummy vectors."""
