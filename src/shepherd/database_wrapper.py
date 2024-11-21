@@ -263,7 +263,7 @@ class DatabaseWrapper:
             # Remove duplicates and outliers
             if len(combined_cloud) > 0:
                 # Voxelize to remove duplicates
-                voxel_size = 0.01  # 5cm voxels
+                voxel_size = 0.01  # 1cm voxels
                 voxel_dict = {}
                 for point in combined_cloud:
                     voxel_key = tuple(np.round(point / voxel_size))
