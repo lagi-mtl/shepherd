@@ -14,7 +14,7 @@ def main():
     shepherd = Shepherd(config=config)
 
     # Read image
-    image_path = "../images/living_room.png"
+    image_path = "./images/living_room.png"
     image = cv2.imread(image_path)
     if image is None:
         raise ValueError(f"Could not read image from {image_path}")

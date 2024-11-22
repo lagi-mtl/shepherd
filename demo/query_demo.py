@@ -12,7 +12,7 @@ def main():
     viz = VisualizationUtils()
 
     # First, process an image to store objects
-    image_path = "../images/living_room.png"
+    image_path = "./images/living_room.png"
     image = cv2.imread(image_path)
     if image is None:
         raise ValueError(f"Could not read image from {image_path}")
