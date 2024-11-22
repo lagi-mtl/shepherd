@@ -87,7 +87,7 @@ class Shepherd:
         
     def process_frame(self, frame: np.ndarray, depth_frame: Optional[np.ndarray] = None, camera_pose: Optional[Dict] = None):
         """Process a single frame through the vision pipeline."""
-        # Run detection with lower confidence threshold for more detections
+        # Run detection
         detections = self._process_detections(frame)
         
         # Get segmentation masks for detections
