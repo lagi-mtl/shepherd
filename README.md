@@ -11,12 +11,32 @@ Shepherd is a 3D visual object mapping system for robot querying.
 ## Installation
 
 ```bash
+pip install -r requirements.txt
 pip install -e .
 ```
 
-## ROS2
+## Running
+
+### Query Demo
+
+This demo runs the 3D object query using an image.
 
 ```bash
-colcon build --packages-select shepherd_ros2
-ros2 run shepherd_ros2 shepherd
+python demo/query_demo.py
+```
+
+### Pipeline Demo
+
+This demo runs each step of the pipeline in sequence so that you can see the intermediate results.
+
+```bash
+python demo/step_demo.py
+```
+
+### Habitat Demo
+
+This demo runs the Habitat simulator with the Shepherd pipeline. To run this demo, you first need to download the Replica data and place it at the root of the repository. (See the [Meta Repository](https://github.com/facebookresearch/Replica-Dataset))
+
+```bash
+python demo/habitat_demo.py
 ```
