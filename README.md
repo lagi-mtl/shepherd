@@ -1,6 +1,6 @@
 # Shepherd
 
-Shepherd is a computer vision pipeline and world modeling system designed for easy integration in embodied systems. It detects, tracks, and analyzes objects to gradually build a semantic 3D representation of its environment by maintaining a persistent database of object point clouds with associated visual and semantic features, enabling spatial reasoning and natural language queries about the observed scene. It is heavily inspired by [ConceptGraph](https://concept-graphs.github.io/) and developped with equal contribution by Simon Roy and Samuel Barbeau.
+Shepherd is a computer vision pipeline and world modeling system designed for easy integration in embodied systems. Although initially built for Rove, [Capra](https://www.clubcapra.com)'s autonomous search and rescue robot, it aims to be flexible and lightweight enough to be run on any platform. It detects, tracks, and analyzes objects to gradually build a semantic 3D representation of its environment by maintaining a persistent database of object point clouds with associated visual and semantic features, enabling spatial reasoning and natural language queries about the observed scene. It is heavily inspired by [ConceptFusion](https://concept-fusion.github.io) and developped with equal contribution by Simon Roy and Samuel Barbeau.
 
 ***It is currently a work in progress.***
 
@@ -11,6 +11,7 @@ Shepherd is a computer vision pipeline and world modeling system designed for ea
 - [ ] Implement LLM for reverse-querying
 - [ ] Add reverse-querying based on object captions
 - [ ] Add path finding based on reverse-query
+- [ ] Add RL-based action completion from vocal queries 
 
 ## Documentation
 
@@ -26,6 +27,8 @@ pip install -e .
 ```
 
 ## Running
+
+As mentionned above, Sherpherd is currently in development and is likely not bug free. We therefore cannot guarantee that the demos will work on all systems.
 
 ### Query Demo
 
