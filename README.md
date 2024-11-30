@@ -45,13 +45,13 @@ python demo/step_demo.py
 
 ### Habitat Demo
 
-## References
-
-This work builds upon:
-- [ConceptGraph: A Graph Neural Network Framework for Building Robot World Models](https://concept-graphs.github.io/)
-
 This demo runs the Habitat simulator with the Shepherd pipeline. To run this demo, you first need to download the Replica data and place it at the root of the repository. (See the [Meta Repository](https://github.com/facebookresearch/Replica-Dataset))
 
 ```bash
 python demo/habitat_demo.py
 ```
+
+## References
+
+This work builds upon:
+- [ConceptGraph: A Graph Neural Network Framework for Building Robot World Models](https://concept-graphs.github.io/)
