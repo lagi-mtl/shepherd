@@ -122,7 +122,8 @@ class Shepherd:
             if self.config.use_caption:
                 caption = self._process_captions(masked_region)
             else:
-                caption = None
+                # Cannot use None as the current vector database only accepts primitive types for metadata
+                caption = ''
             
             embedding = self.embedder.encode_image(masked_region)
             
@@ -234,6 +235,9 @@ class Shepherd:
             mad = np.median(np.abs(points - median), axis=0)
             valid_points = np.all(np.abs(points - median) <= 3 * mad, axis=1)
             points = points[valid_points]
+
+        print("\n=== Camera Space Points ===")
+        self.config.camera.debug_transform(points, None)  # No camera pose yet
         
         return points
         

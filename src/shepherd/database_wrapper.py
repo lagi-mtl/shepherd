@@ -5,7 +5,7 @@ import chromadb
 import numpy as np
 import open3d as o3d
 import torch
-from sklearn.cluster import DBSCAN
+from dbscan import DBSCAN
 from sklearn.neighbors import NearestNeighbors
 
 from .utils.camera import CameraUtils
@@ -81,16 +81,19 @@ class DatabaseWrapper:
             return np.array([]), embedding
 
         try:
+            print("\n=== World Transform Debug ===")
+            self.camera.debug_transform(point_cloud, camera_pose)
             # Transform to world coordinates
             point_cloud = self.camera.transform_point_cloud(point_cloud, camera_pose)
 
-            # DBSCAN clustering for noise removal
-            clustering = DBSCAN(
-                eps=self.cluster_eps, min_samples=self.cluster_min_samples, n_jobs=-1
-            ).fit(point_cloud)
+            labels, _ = DBSCAN(
+                point_cloud,
+                eps=self.cluster_eps, 
+                min_samples=self.cluster_min_samples, 
+            )
 
             # Get largest cluster
-            labels = clustering.labels_
+            labels = labels
             unique_labels = np.unique(labels)
             if len(unique_labels) == 1 and unique_labels[0] == -1:
                 return np.array([]), embedding

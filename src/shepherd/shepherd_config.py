@@ -6,7 +6,8 @@ import numpy as np
 from .utils.camera import CameraUtils
 
 class ShepherdConfig:
-    def __init__(self, model_dir: Optional[str] = None, 
+    def __init__(self, 
+                 model_dir: Optional[str] = None,
                  camera_height: float = 0.0, 
                  camera_pitch: float = 0.0):  # Default to 0 instead of -1.57
         """
@@ -35,7 +36,7 @@ class ShepherdConfig:
         }
 
         # Use caption for object description
-        self.use_caption = True
+        self.use_caption = False
         
         # Model-specific parameters
         self.thresholds = {
@@ -54,8 +55,8 @@ class ShepherdConfig:
         
         # Initialize camera utils with default square frame
         self.camera = CameraUtils(
-            width=1024,
-            height=1024,
+            width=720,
+            height=480,
             fov=1.0,
             camera_height=camera_height,
             camera_pitch=camera_pitch
@@ -63,7 +64,7 @@ class ShepherdConfig:
         
         # Add default query
         self.default_query = "nice place to sit"
-        print("default query :", self.default_query)
+        print("Default query :", self.default_query)
     
     def get(self, key: str, default: Any = None) -> Any:
         """

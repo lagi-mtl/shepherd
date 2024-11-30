@@ -15,10 +15,9 @@ from shepherd.shepherd import Shepherd
 from shepherd.shepherd_config import ShepherdConfig
 from shepherd.utils.camera import CameraUtils
 
-
 class HabitatEnv(gym.Env):
     """RL environment wrapper for Habitat."""
-    def __init__(self, scene_path: str, shepherd: Shepherd):
+    def __init__(self, scene_path: str, shepherd: Shepherd, camera_config: CameraUtils):
         super().__init__()
         
         # Store Shepherd instance
@@ -35,8 +34,8 @@ class HabitatEnv(gym.Env):
         
         # Observation space includes RGB image and depth image
         self.observation_space = spaces.Dict({
-            'rgb': spaces.Box(low=0, high=255, shape=(256, 256, 3), dtype=np.uint8),
-            'depth': spaces.Box(low=0, high=np.inf, shape=(256, 256, 1), dtype=np.float32),
+            'rgb': spaces.Box(low=0, high=255, shape=(camera_config.height, camera_config.width, 3), dtype=np.uint8),
+            'depth': spaces.Box(low=0, high=np.inf, shape=(camera_config.height, camera_config.width, 1), dtype=np.float32),
         })
         
         # Initialize agent
@@ -80,7 +79,7 @@ class HabitatEnv(gym.Env):
         rgb_sensor_spec.uuid = "color_sensor"
         rgb_sensor_spec.sensor_type = habitat_sim.SensorType.COLOR
         rgb_sensor_spec.hfov = 90
-        rgb_sensor_spec.resolution = [256, 256]
+        rgb_sensor_spec.resolution = [720, 480]
         rgb_sensor_spec.position = [0.0, 1.5, 0.0]  # Camera at agent head height
         rgb_sensor_spec.orientation = [0.0, 0.0, 0.0]  # No initial rotation
         
@@ -89,7 +88,7 @@ class HabitatEnv(gym.Env):
         depth_sensor_spec.uuid = "depth_sensor"
         depth_sensor_spec.sensor_type = habitat_sim.SensorType.DEPTH
         depth_sensor_spec.hfov = 90
-        depth_sensor_spec.resolution = [256, 256]
+        depth_sensor_spec.resolution = [720, 480]
         depth_sensor_spec.position = [0.0, 1.5, 0.0]
         depth_sensor_spec.orientation = [0.0, 0.0, 0.0]  # Match RGB sensor
         depth_sensor_spec.normalize_depth = False
@@ -123,6 +122,7 @@ class HabitatEnv(gym.Env):
         """Get current agent pose in world coordinates with proper transformation."""
         agent_state = self.agent.get_state()
         position = agent_state.position
+        print(position)
         
         # Convert Habitat's Y-axis rotation to Z-axis rotation for ROS compatibility
         habitat_rotation = agent_state.rotation
@@ -194,7 +194,6 @@ class HabitatEnv(gym.Env):
                 depth,
                 agent_pose
             )
-
             
             self.last_frame_results = results
             self.last_frame_time = time.time()
@@ -296,6 +295,7 @@ class HabitatEnv(gym.Env):
         print(f"Saved debug point cloud to: {output_path}")
 
 def main():
+
     # Initialize Shepherd with config
     config = ShepherdConfig(
         camera_height=1.0,
@@ -325,10 +325,10 @@ def main():
     shepherd = Shepherd(config=config)
     
     # Initialize environment
-    scene_path = "./Replica-Dataset/data/apartment_2/mesh.ply"
+    scene_path = "../../datasets/replica_v1/apartment_0/habitat/mesh_semantic.ply"
     
     try:
-        env = HabitatEnv(scene_path, shepherd)
+        env = HabitatEnv(scene_path, shepherd, config.camera)
         obs, _ = env.reset()
         
         print("\nControls:")
