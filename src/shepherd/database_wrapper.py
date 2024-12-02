@@ -1,11 +1,12 @@
 import os
+import time
 from typing import Dict, List, Optional, Tuple
 
 import chromadb
 import numpy as np
 import open3d as o3d
 import torch
-from sklearn.cluster import DBSCAN
+from dbscan import DBSCAN
 from sklearn.neighbors import NearestNeighbors
 
 from .utils.camera import CameraUtils
@@ -84,13 +85,17 @@ class DatabaseWrapper:
             # Transform to world coordinates
             point_cloud = self.camera.transform_point_cloud(point_cloud, camera_pose)
 
-            # DBSCAN clustering for noise removal
-            clustering = DBSCAN(
-                eps=self.cluster_eps, min_samples=self.cluster_min_samples, n_jobs=-1
-            ).fit(point_cloud)
+            # Run DBSCAN directly on point cloud
+            start_time = time.time()
+            labels, _ = DBSCAN(
+                point_cloud,
+                eps=self.cluster_eps,
+                min_samples=self.cluster_min_samples,
+            )
+            end_time = time.time()
+            print(f"DBSCAN clustering time: {end_time - start_time} seconds")
 
             # Get largest cluster
-            labels = clustering.labels_
             unique_labels = np.unique(labels)
             if len(unique_labels) == 1 and unique_labels[0] == -1:
                 return np.array([]), embedding
