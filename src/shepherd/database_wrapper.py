@@ -3,8 +3,9 @@ Database wrapper.
 """
 
 import os
+import random
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 import chromadb
 import numpy as np
@@ -473,7 +474,9 @@ class DatabaseWrapper:
 
     def save_point_cloud_ply(self, output_path: str):
         """
-        Save the current point clouds with similarity colors to a PLY file.
+        Save the current point clouds with colors to a PLY file.
+        If query_embedding exists, colors represent similarity scores.
+        Otherwise, each unique object gets a random uniform color.
 
         Args:
             output_path (str): Path where to save the PLY file
@@ -485,15 +488,15 @@ class DatabaseWrapper:
             # Get all objects
             results = self.collection.get(include=["metadatas", "embeddings"])
 
-            if not results or self.query_embedding is None:
-                return
-
-            # Collect all points and their similarities
+            # Collect all points and their colors
             all_points = []
-            all_similarities = []
+            all_colors = []
 
             # Get all IDs from collection
             all_ids = [str(i) for i in range(self.collection.count())]
+
+            # Generate random colors for each object if no query
+            object_colors: Dict[str, Tuple[float, float, float]] = {}
 
             for i, (metadata, embedding) in enumerate(
                 zip(results["metadatas"], results["embeddings"])
@@ -509,47 +512,75 @@ class DatabaseWrapper:
                 # Get point cloud
                 point_cloud = self.point_clouds.get(current_id)
                 if point_cloud is not None and len(point_cloud) > 0:
-                    # Compute similarity with query embedding
-                    similarity = self._compute_semantic_similarity(
-                        np.array(embedding), self.query_embedding
-                    )
+                    if self.query_embedding is not None:
+                        # Use similarity-based coloring
+                        similarity = self._compute_semantic_similarity(
+                            np.array(embedding), self.query_embedding
+                        )
+                        # Create red gradient based on similarity
+                        color = np.array([[similarity, 0, 0]] * len(point_cloud))
+                    else:
+                        # Generate random color for this object if not already assigned
+                        if current_id not in object_colors:
+                            # Generate bright, distinguishable colors
+                            hue = random.random()  # Random hue
+                            object_colors[current_id] = tuple(
+                                c / 255 for c in self._hsv_to_rgb(hue, 0.8, 0.8)
+                            )
+
+                        # Use the object's random color
+                        color = np.array([object_colors[current_id]] * len(point_cloud))
 
                     all_points.extend(point_cloud)
-                    all_similarities.extend([similarity] * len(point_cloud))
+                    all_colors.extend(color)
 
             if all_points:
                 # Convert to numpy arrays
                 all_points = np.array(all_points)
-                all_similarities = np.array(all_similarities)
+                all_colors = np.array(all_colors)
 
                 # Create Open3D point cloud
                 pcd = o3d.geometry.PointCloud()
                 pcd.points = o3d.utility.Vector3dVector(all_points)
-
-                # Normalize similarities to [0, 1] range
-                if (
-                    len(np.unique(all_similarities)) > 1
-                ):  # Only normalize if we have different values
-                    min_similarity = np.min(all_similarities)
-                    max_similarity = np.max(all_similarities)
-                    normalized_similarities = (all_similarities - min_similarity) / (
-                        max_similarity - min_similarity
-                    )
-                else:
-                    normalized_similarities = all_similarities
-
-                # Map similarity to black-to-red (R=normalized similarity, G=0, B=0)
-                colors = np.column_stack(
-                    (
-                        normalized_similarities,
-                        np.zeros_like(normalized_similarities),
-                        np.zeros_like(normalized_similarities),
-                    )
-                )
-                pcd.colors = o3d.utility.Vector3dVector(colors)
+                pcd.colors = o3d.utility.Vector3dVector(all_colors)
 
                 # Save to PLY file
                 o3d.io.write_point_cloud(output_path, pcd)
 
         except (ValueError, np.linalg.LinAlgError, RuntimeError) as e:
             print(f"Error saving point cloud to PLY: {str(e)}")
+
+    def _hsv_to_rgb(self, h: float, s: float, v: float) -> Tuple[float, float, float]:
+        """
+        Convert HSV color to RGB color.
+
+        Args:
+            h (float): Hue (0-1)
+            s (float): Saturation (0-1)
+            v (float): Value (0-1)
+
+        Returns:
+            Tuple[float, float, float]: RGB color values (0-255)
+        """
+        if s == 0.0:
+            return v, v, v
+
+        i = int(h * 6.0)
+        f = (h * 6.0) - i
+        p = v * (1.0 - s)
+        q = v * (1.0 - s * f)
+        t = v * (1.0 - s * (1.0 - f))
+        i = i % 6
+
+        if i == 0:
+            return v * 255, t * 255, p * 255
+        if i == 1:
+            return q * 255, v * 255, p * 255
+        if i == 2:
+            return p * 255, v * 255, t * 255
+        if i == 3:
+            return p * 255, q * 255, v * 255
+        if i == 4:
+            return t * 255, p * 255, v * 255
+        if i == 5:
+            return v * 255, p * 255, q * 255
