@@ -43,14 +43,14 @@ class DAN(DepthModel):
                 depth = self.model(pil_image)["depth"]
 
             return self.postprocess(depth)
-        except Exception as e:
+        except (ValueError, RuntimeError, torch.cuda.OutOfMemoryError) as e:
             print(f"Error estimating depth: {str(e)}")
             return np.zeros(image.shape[:2])
 
-    def postprocess(self, depth: Image.Image) -> np.ndarray:
+    def postprocess(self, output: Image.Image) -> np.ndarray:
         """Convert depth output to normalized numpy array."""
         # Convert PIL Image to numpy array
-        depth_np = np.array(depth)
+        depth_np = np.array(output)
 
         # Normalize depth values to 0-1 range
         depth_np = (depth_np - depth_np.min()) / (depth_np.max() - depth_np.min())

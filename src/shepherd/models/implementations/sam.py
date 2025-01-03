@@ -31,14 +31,14 @@ class SAM(SegmentationModel):
 
     def load_model(self):
         """Load FastSAM model."""
-        overrides = dict(
-            conf=0.25,
-            task="segment",
-            mode="predict",
-            imgsz=1024,
-            model=self.model_path,
-            save=False,
-        )
+        overrides = {
+            "conf": 0.25,
+            "task": "segment",
+            "mode": "predict",
+            "imgsz": 1024,
+            "model": self.model_path,
+            "save": False,
+        }
         self.predictor = FastSAMPredictor(overrides=overrides)
 
     def preprocess(self, image: np.ndarray) -> np.ndarray:
@@ -71,10 +71,10 @@ class SAM(SegmentationModel):
 
         return self.postprocess(masks)
 
-    def postprocess(self, masks: List[np.ndarray]) -> List[np.ndarray]:
+    def postprocess(self, output: List[np.ndarray]) -> List[np.ndarray]:
         """Resize masks back to original size."""
         processed_masks = []
-        for mask in masks:
+        for mask in output:
             resized_mask = cv2.resize(
                 mask.astype(float),
                 dsize=(int(self.original_width), int(self.original_height)),

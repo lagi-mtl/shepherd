@@ -3,7 +3,7 @@ Segmentation model.
 """
 
 from abc import abstractmethod
-from typing import List
+from typing import Dict, List
 
 import numpy as np
 
@@ -16,7 +16,7 @@ class SegmentationModel(BaseModel):
     """
 
     @abstractmethod
-    def segment(self, image: np.ndarray) -> List[np.ndarray]:
+    def segment(self, image: np.ndarray, detections: List[Dict]) -> List[np.ndarray]:
         """
         Segment objects in image.
         Returns list of segmentation masks.

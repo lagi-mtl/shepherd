@@ -46,7 +46,7 @@ class BLIP(CaptioningModel):
             with torch.no_grad():
                 outputs = self.model.generate(**inputs, max_length=50, num_beams=5)
             return self.postprocess(outputs)
-        except Exception as e:
+        except (ValueError, np.linalg.LinAlgError, RuntimeError) as e:
             print(f"Error generating caption: {str(e)}")
             return ""
 

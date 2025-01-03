@@ -83,7 +83,7 @@ class ShepherdConfig:
         try:
             current = self
             for part in key.split("."):
-                if hasattr(current, part):
+                if hasattr(self, part):
                     current = getattr(current, part)
                 elif isinstance(current, dict):
                     current = current[part]

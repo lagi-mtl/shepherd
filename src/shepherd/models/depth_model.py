@@ -20,4 +20,3 @@ class DepthModel(BaseModel):
         Estimate depth map from image.
         Returns depth map as numpy array.
         """
-        pass

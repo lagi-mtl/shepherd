@@ -40,7 +40,7 @@ class CLIP(EmbeddingModel):
                     dim=-1, keepdim=True
                 )
             return self.postprocess(image_features)
-        except Exception as e:
+        except (ValueError, np.linalg.LinAlgError, RuntimeError) as e:
             print(f"Error encoding image: {str(e)}")
             return np.zeros((512,))  # CLIP ViT-B/32 has 512-dimensional embeddings
 

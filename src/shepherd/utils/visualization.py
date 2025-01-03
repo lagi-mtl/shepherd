@@ -340,6 +340,8 @@ class VisualizationUtils:
                 # Add to visualizer
                 vis.add_geometry(pcd)
 
+                class_id = int(float(metadata.get("class_id", 0)))
+
                 # Print metadata and similarity
                 print(
                     f"\nObject {i+1} with similarity {similarity:.3f} "
@@ -347,7 +349,7 @@ class VisualizationUtils:
                 )
                 print(f"  Caption: {metadata.get('caption', 'No caption')}")
                 print(
-                    f"  Class: {VisualizationUtils.YOLO_CLASSES.get(int(float(metadata.get('class_id', 0))), 'Unknown')}"
+                    f"  Class: {VisualizationUtils.YOLO_CLASSES.get(class_id, 'Unknown')}"
                 )
                 print(f"  Confidence: {float(metadata.get('confidence', 0)):.2f}")
 
