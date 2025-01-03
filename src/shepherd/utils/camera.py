@@ -119,7 +119,7 @@ class CameraUtils:
             points_fixed[..., 2] *= -1  # Flip Z (forward)
 
             if camera_pose:
-                # 2. Get rotation matrix from quaternion
+                # 2. Get rotation matrix from quaternion (raw Habitat quaternion)
                 R = Rotation.from_quat(
                     [
                         camera_pose["qx"],
@@ -127,16 +127,12 @@ class CameraUtils:
                         camera_pose["qz"],
                         camera_pose["qw"],
                     ]
-                )
+                ).as_matrix()
 
-                # 3. Apply additional rotation to align with Habitat's coordinate system
-                correction = Rotation.from_euler("xyz", [0, 0, 90], degrees=True)
-                R = correction * R
+                # 3. Apply rotation
+                points_fixed = (R @ points_fixed.T).T
 
-                # 4. Apply combined rotation
-                points_fixed = (R.as_matrix() @ points_fixed.T).T
-
-                # 5. Apply translation
+                # 4. Apply translation
                 t = np.array(
                     [
                         camera_pose["x"],
@@ -146,7 +142,7 @@ class CameraUtils:
                 )
                 points_fixed = points_fixed + t
 
-            # 6. Add camera height offset
+            # 5. Add camera height offset
             camera_offset = np.array([0, self.camera_height, 0])
             transformed = points_fixed + camera_offset
 

@@ -134,34 +134,17 @@ class HabitatEnv(gym.Env):
         agent_state = self.agent.get_state()
         position = agent_state.position
 
-        # Convert Habitat's quaternion to proper camera pose
+        # Just pass the raw Habitat quaternion to the camera utils
         habitat_rotation = agent_state.rotation
-        # Create rotation matrix from habitat quaternion
-        R = Rotation.from_quat(
-            [
-                habitat_rotation.x,
-                habitat_rotation.y,
-                habitat_rotation.z,
-                habitat_rotation.w,
-            ]
-        )
-
-        # Habitat uses a different coordinate system, so we need to transform
-        # Convert from Habitat (Y-up, -Z forward) to standard (Z-up, X forward)
-        correction = Rotation.from_euler("xyz", [0, 0, -90], degrees=True)
-        R = correction * R
-
-        # Get the final quaternion
-        quat = R.as_quat()
 
         return {
             "x": float(position[0]),
             "y": float(position[1]),
             "z": float(position[2]),
-            "qx": float(quat[0]),
-            "qy": float(quat[1]),
-            "qz": float(quat[2]),
-            "qw": float(quat[3]),
+            "qx": float(habitat_rotation.x),
+            "qy": float(habitat_rotation.y),
+            "qz": float(habitat_rotation.z),
+            "qw": float(habitat_rotation.w),
         }
 
     def step(self, action: int) -> Tuple[Dict[str, Any], float, bool, bool, Dict]:
