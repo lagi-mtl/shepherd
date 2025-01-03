@@ -1,9 +1,24 @@
-from typing import Dict, Tuple
+from typing import Dict, Literal, Tuple
 
 import numpy as np
+from scipy.spatial.transform import Rotation
 
 
 class CameraUtils:
+    # Coordinate system definitions
+    COORDINATE_SYSTEMS = {
+        "ros": {
+            "up_axis": "z",
+            "forward_axis": "x",
+            "camera_offset": np.array([0.1, 0, 0]),  # Offset in camera frame
+        },
+        "habitat": {
+            "up_axis": "y",
+            "forward_axis": "-z",
+            "camera_offset": np.array([0, 0, 0]),  # No additional offset needed
+        },
+    }
+
     def __init__(
         self,
         width: int = 1344,
@@ -13,109 +28,85 @@ class CameraUtils:
         camera_pitch: float = 0.0,
         camera_yaw: float = 0.0,
         camera_roll: float = 0.0,
+        coordinate_frame: Literal["ros", "habitat"] = "ros",
     ):
-        """
-        Initialize camera parameters.
-
-        Args:
-            width: Image width in pixels
-            height: Image height in pixels
-            fov: Horizontal field of view in radians
-            camera_height: Camera height from ground in meters
-            camera_pitch: Camera pitch angle in radians
-            camera_yaw: Camera yaw angle in radians
-            camera_roll: Camera roll angle in radians
-        """
+        """Initialize camera parameters."""
         self.width = width
         self.height = height
         self.fov = fov
         self.camera_height = camera_height
+        self.coordinate_frame = coordinate_frame
 
-        # Store rotation angles
-        self.camera_pitch = camera_pitch
-        self.camera_yaw = camera_yaw
-        self.camera_roll = camera_roll
-
-        # Calculate focal length from FOV and image width
+        # Camera intrinsics
         self.fx = (self.width / 2) / np.tan(self.fov / 2)
         self.fy = self.fx  # Assuming square pixels
         self.cx = self.width / 2
         self.cy = self.height / 2
 
-        # Create rotation matrices
-        self.update_rotation_matrices()
+        # Camera extrinsics
+        self.set_camera_pose(camera_pitch, camera_yaw, camera_roll)
 
-    def update_rotation_matrices(self):
-        """Update rotation matrices based on current angles."""
-        # Pitch rotation (around X)
-        self.Rx = np.array(
-            [
-                [1, 0, 0],
-                [0, np.cos(self.camera_pitch), -np.sin(self.camera_pitch)],
-                [0, np.sin(self.camera_pitch), np.cos(self.camera_pitch)],
-            ]
-        )
+    def set_camera_pose(self, pitch: float, yaw: float, roll: float):
+        """Update camera pose angles."""
+        self.camera_pitch = pitch
+        self.camera_yaw = yaw
+        self.camera_roll = roll
 
-        # Yaw rotation (around Y)
-        self.Ry = np.array(
-            [
-                [np.cos(self.camera_yaw), 0, np.sin(self.camera_yaw)],
-                [0, 1, 0],
-                [-np.sin(self.camera_yaw), 0, np.cos(self.camera_yaw)],
-            ]
-        )
-
-        # Roll rotation (around Z)
-        self.Rz = np.array(
-            [
-                [np.cos(self.camera_roll), -np.sin(self.camera_roll), 0],
-                [np.sin(self.camera_roll), np.cos(self.camera_roll), 0],
-                [0, 0, 1],
-            ]
-        )
-
-        # Combined camera rotation matrix (apply in order: roll, pitch, yaw)
-        self.camera_rotation = self.Ry @ self.Rx @ self.Rz
+        # Create camera rotation from euler angles
+        if self.coordinate_frame == "habitat":
+            # Habitat uses different angle conventions
+            self.camera_rotation = Rotation.from_euler(
+                "yxz",  # Habitat's rotation order
+                [-yaw, -pitch, roll],  # Negated to match Habitat's convention
+            ).as_matrix()
+        else:
+            # ROS/Gazebo convention
+            self.camera_rotation = Rotation.from_euler(
+                "xyz", [roll, pitch, yaw]
+            ).as_matrix()
 
     def transform_point_cloud(
         self, points: np.ndarray, camera_pose: Dict
     ) -> np.ndarray:
-        """Transform entire point cloud from camera to world coordinates."""
-        # Apply camera rotation to all points
-        rotated = (self.camera_rotation @ points.T).T
+        """Transform point cloud from camera to world coordinates."""
+        if len(points) == 0:
+            return points
 
-        # Add camera offset to all points
-        camera_offset = np.array([0.1, 0, self.camera_height])
-        transformed = rotated + camera_offset
+        # Get coordinate system configuration
+        coord_sys = self.COORDINATE_SYSTEMS[self.coordinate_frame]
 
-        # Apply camera pose transformation if provided
+        # 1. Convert points from camera frame to world-aligned frame
+        points_fixed = points.copy()
+
+        if self.coordinate_frame == "habitat":
+            # Convert from camera (Z forward, -Y up) to Habitat (X right, Y up, -Z forward)
+            points_fixed[..., 1] *= -1  # Flip Y (up)
+            points_fixed[..., 2] *= -1  # Flip Z (forward)
+
+        # 2. Apply camera pose transformation
         if camera_pose:
-            qx, qy, qz, qw = (
-                camera_pose["qx"],
-                camera_pose["qy"],
-                camera_pose["qz"],
-                camera_pose["qw"],
-            )
-            R = np.array(
+            # Get world rotation from quaternion
+            R = Rotation.from_quat(
                 [
-                    [
-                        1 - 2 * qy * qy - 2 * qz * qz,
-                        2 * qx * qy - 2 * qz * qw,
-                        2 * qx * qz + 2 * qy * qw,
-                    ],
-                    [
-                        2 * qx * qy + 2 * qz * qw,
-                        1 - 2 * qx * qx - 2 * qz * qz,
-                        2 * qy * qz - 2 * qx * qw,
-                    ],
-                    [
-                        2 * qx * qz - 2 * qy * qw,
-                        2 * qy * qz + 2 * qx * qw,
-                        1 - 2 * qx * qx - 2 * qy * qy,
-                    ],
+                    camera_pose["qx"],
+                    camera_pose["qy"],
+                    camera_pose["qz"],
+                    camera_pose["qw"],
                 ]
-            )
+            ).as_matrix()
+
+            # Apply rotation and translation
+            points_fixed = (R @ points_fixed.T).T
             t = np.array([camera_pose["x"], camera_pose["y"], camera_pose["z"]])
-            transformed = (R @ transformed.T).T + t
+            points_fixed = points_fixed + t
+
+        # 3. Add camera height and system-specific offset
+        height_offset = np.zeros(3)
+        if coord_sys["up_axis"] == "y":
+            height_offset[1] = self.camera_height
+        else:  # "z"
+            height_offset[2] = self.camera_height
+
+        transformed = points_fixed + height_offset + coord_sys["camera_offset"]
 
         return transformed

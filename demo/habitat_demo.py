@@ -134,34 +134,17 @@ class HabitatEnv(gym.Env):
         agent_state = self.agent.get_state()
         position = agent_state.position
 
-        # Convert Habitat's Y-axis rotation to Z-axis rotation for ROS compatibility
+        # Just pass the raw Habitat quaternion to the camera utils
         habitat_rotation = agent_state.rotation
-        # Create rotation matrix from habitat quaternion
-        R = Rotation.from_quat(
-            [
-                habitat_rotation.x,
-                habitat_rotation.y,
-                habitat_rotation.z,
-                habitat_rotation.w,
-            ]
-        )
-        # Convert to euler angles
-        euler = R.as_euler("xyz")
-        # Move rotation from Y to Z axis
-        print(f"Euler angles: {euler}")
-        new_euler = [euler[0], euler[1], euler[2]]  # Take Y rotation and put it in Z
-        # Convert back to quaternion
-        new_rotation = Rotation.from_euler("xyz", new_euler)
-        quat = new_rotation.as_quat()
 
         return {
             "x": float(position[0]),
             "y": float(position[1]),
             "z": float(position[2]),
-            "qx": float(quat[0]),
-            "qy": float(quat[1]),
-            "qz": float(quat[2]),
-            "qw": float(quat[3]),
+            "qx": float(habitat_rotation.x),
+            "qy": float(habitat_rotation.y),
+            "qz": float(habitat_rotation.z),
+            "qw": float(habitat_rotation.w),
         }
 
     def step(self, action: int) -> Tuple[Dict[str, Any], float, bool, bool, Dict]:
@@ -207,8 +190,8 @@ class HabitatEnv(gym.Env):
                 f"Agent Position: ({agent_pose['x']:.2f}, {agent_pose['y']:.2f}, {agent_pose['z']:.2f})"
             )
 
+            # Process frame and update point cloud
             results = self.shepherd.process_frame(rgb_bgr, depth, agent_pose)
-
             self.last_frame_results = results
             self.last_frame_time = time.time()
 
@@ -219,13 +202,13 @@ class HabitatEnv(gym.Env):
             "camera_pose": agent_pose,
         }
 
-    def reset(self, seed=None, options=None):
+    def reset(self, *, seed=None, options=None):
         """Reset environment."""
-        super().reset(seed=seed)
+        super().reset(seed=seed, options=options)
         self._reset_agent()
         return self._get_observation(), {}
 
-    def render(self) -> np.ndarray:
+    def render(self):
         """Render environment with detections and depth visualization."""
         obs = self._get_observation()
 
@@ -334,10 +317,11 @@ def main():
         width=256,
         height=256,
         fov=1.57,  # 90 degrees FOV
-        camera_height=1.0,
+        camera_height=1.5,
         camera_pitch=0.0,
         camera_yaw=0.0,
         camera_roll=0.0,
+        coordinate_frame="habitat",
     )
 
     # Print initial configuration
