@@ -2,7 +2,10 @@
 Shepherd class.
 """
 
-from typing import Dict, List, Optional
+import time
+from concurrent.futures import ThreadPoolExecutor
+from re import S
+from typing import Dict, List, Optional, Union
 
 import cv2
 import numpy as np
@@ -78,6 +81,8 @@ class Shepherd:
         if self.config.default_query:
             self.update_query(self.config.default_query)
 
+        self.current_time = time.time()
+
     def update_query(self, query_text: str):
         """Update the query and compute its embedding."""
         self.config.default_query = query_text
@@ -105,10 +110,21 @@ class Shepherd:
     ):
         """Process a single frame through the vision pipeline."""
         # Run detection
+        print(f"time taken : {time.time() - self.current_time:.2f} seconds")
+        self.current_time = time.time()
+
+        start_time = time.time()
+
         detections = self._process_detections(frame)
 
+        detection_time = time.time()
+        print(f"Detection time: {detection_time - start_time:.2f} seconds")
+
         # Get segmentation masks for detections
+        start_time = time.time()
         masks = self._process_segments(frame, detections)
+        segmentation_time = time.time()
+        print(f"Segmentation time: {segmentation_time - detection_time:.2f} seconds")
 
         # If no depth frame provided, estimate it using DAN
         if depth_frame is None and self.depth_estimator is not None:
@@ -117,68 +133,75 @@ class Shepherd:
             if depth_frame is not None:
                 depth_frame = np.clip(depth_frame, 0.1, 10.0)
 
-        # Process each detection
-        results = []
-        for detection, mask in zip(detections, masks):
-            # Get bounding box coordinates from mask
-            x, y, w, h = cv2.boundingRect(mask.astype(np.uint8))
+        # Initialize thread pool for async captioning
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            # Process each detection
+            results = []
+            for detection, mask in zip(detections, masks):
+                # Get bounding box coordinates from mask
+                x, y, w, h = cv2.boundingRect(mask.astype(np.uint8))
 
-            # Ensure minimum size for processing
-            if w < 10 or h < 10:
-                continue
+                # Ensure minimum size for processing
+                if w < 10 or h < 10:
+                    continue
 
-            # Extract region using bounding box with padding
-            pad = 10  # Add padding pixels
-            y1 = max(0, y - pad)
-            y2 = min(frame.shape[0], y + h + pad)
-            x1 = max(0, x - pad)
-            x2 = min(frame.shape[1], x + w + pad)
-            masked_region = frame[y1:y2, x1:x2]
+                # Extract region using bounding box with padding
+                pad = 10  # Add padding pixels
+                y1 = max(0, y - pad)
+                y2 = min(frame.shape[0], y + h + pad)
+                x1 = max(0, x - pad)
+                x2 = min(frame.shape[1], x + w + pad)
+                masked_region = frame[y1:y2, x1:x2]
 
-            # Get caption and embedding
-            if self.config.use_caption:
-                caption = self._process_captions(masked_region)
-            else:
-                caption = None
+                # Get embedding
+                embedding = self.embedder.encode_image(masked_region)
 
-            embedding = self.embedder.encode_image(masked_region)
+                # Get depth information and create point cloud
+                point_cloud = self._create_point_cloud(mask, depth_frame)
 
-            # Get depth information and create point cloud
-            point_cloud = self._create_point_cloud(mask, depth_frame)
-
-            # Only process if we have valid point cloud data
-            if (
-                point_cloud is not None and len(point_cloud) > 10
-            ):  # Require minimum points
-                # Create metadata
-                metadata = {
-                    "caption": caption,
-                    "class_id": detection.get("class_id", 0),
-                    "confidence": detection["confidence"],
-                }
-
-                # Store in database and get object ID
-                object_id = self.database.store_object(
-                    embedding=embedding,
-                    metadata=metadata,
-                    point_cloud=point_cloud,
-                    camera_pose=camera_pose,
-                )
-
-                # Get similarity from metadata if it exists
-                similarity = metadata.get("query_similarity")
-
-                results.append(
-                    {
-                        "detection": detection,
-                        "mask": mask,
-                        "caption": caption,
-                        "embedding": embedding,
-                        "depth_frame": depth_frame,
-                        "object_id": object_id,
-                        "similarity": similarity,
+                # Only process if we have valid point cloud data
+                if point_cloud is not None and len(point_cloud) > 10:
+                    # Create metadata
+                    metadata = {
+                        "class_id": detection.get("class_id", 0),
+                        "confidence": detection["confidence"],
                     }
-                )
+
+                    # Store in database and get object ID
+                    object_id, needs_caption = self.database.store_object(
+                        embedding=embedding,
+                        metadata=metadata,
+                        point_cloud=point_cloud,
+                        camera_pose=camera_pose,
+                    )
+
+                    if object_id is not None:
+                        # Submit captioning task if needed
+                        if needs_caption and self.config.use_caption:
+                            future = executor.submit(
+                                self._process_captions, masked_region
+                            )
+                            self.database.update_caption_async(object_id, future)
+
+                        # Get object metadata including caption
+                        obj_metadata = self.database.get_object_metadata(object_id)
+                        caption = obj_metadata.get("caption", "Processing caption...")
+                        print(f"Object {object_id}: {caption}")
+
+                        # Get similarity from metadata if it exists
+                        similarity = metadata.get("query_similarity")
+
+                        results.append(
+                            {
+                                "detection": detection,
+                                "mask": mask,
+                                "embedding": embedding,
+                                "depth_frame": depth_frame,
+                                "object_id": object_id,
+                                "similarity": similarity,
+                                "caption": caption,  # Include caption in results
+                            }
+                        )
 
         return results
 
