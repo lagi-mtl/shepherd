@@ -202,13 +202,13 @@ class HabitatEnv(gym.Env):
             "camera_pose": agent_pose,
         }
 
-    def reset(self, seed=None, options=None):
+    def reset(self, *, seed=None, options=None):
         """Reset environment."""
-        super().reset(seed=seed)
+        super().reset(seed=seed, options=options)
         self._reset_agent()
         return self._get_observation(), {}
 
-    def render(self) -> np.ndarray:
+    def render(self):
         """Render environment with detections and depth visualization."""
         obs = self._get_observation()
 
