@@ -3,8 +3,10 @@ Database wrapper.
 """
 
 import os
+import random
 import time
-from typing import Dict, List, Optional, Tuple
+from concurrent.futures import Future
+from typing import Dict, List, Optional, Tuple, Union
 
 import chromadb
 import numpy as np
@@ -26,7 +28,7 @@ class DatabaseWrapper:
         collection_name: str = "detection_embeddings",
         camera_utils: Optional[CameraUtils] = None,
         distance_threshold: float = 1.5,
-        similarity_threshold: float = 1.5,
+        similarity_threshold: float = 0.3,
         cluster_eps: float = 0.2,
         cluster_min_samples: int = 3,
     ):
@@ -48,6 +50,7 @@ class DatabaseWrapper:
         # Initialize nearest neighbors
         self.nn = NearestNeighbors(n_neighbors=3, algorithm="ball_tree")
         self.query_embedding = None  # Add query embedding storage
+        self.pending_captions = {}  # Store pending caption futures
 
     def _clean_point_cloud(
         self,
@@ -84,6 +87,7 @@ class DatabaseWrapper:
         self, point_cloud: np.ndarray, embedding: np.ndarray, camera_pose: Dict
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Process new detection with DBSCAN clustering and pose transformation."""
+
         if point_cloud is None or len(point_cloud) < self.cluster_min_samples:
             return np.array([]), embedding
 
@@ -92,14 +96,11 @@ class DatabaseWrapper:
             point_cloud = self.camera.transform_point_cloud(point_cloud, camera_pose)
 
             # Run DBSCAN directly on point cloud
-            start_time = time.time()
             labels, _ = DBSCAN(
                 point_cloud,
                 eps=self.cluster_eps,
                 min_samples=self.cluster_min_samples,
             )
-            end_time = time.time()
-            print(f"DBSCAN clustering time: {end_time - start_time} seconds")
 
             # Get largest cluster
             unique_labels = np.unique(labels)
@@ -123,13 +124,24 @@ class DatabaseWrapper:
             return np.array([]), embedding
 
     def _compute_geometric_similarity(
-        self, points1: np.ndarray, points2: np.ndarray, nn_threshold: float = 0.05
+        self, points1: np.ndarray, points2: np.ndarray, nn_threshold: float = 0.1
     ) -> float:
         """Compute geometric similarity using nearest neighbor ratio."""
         if len(points1) == 0 or len(points2) == 0:
             return 0.0
 
         try:
+            # Compute centroids
+            centroid1 = np.mean(points1, axis=0)
+            centroid2 = np.mean(points2, axis=0)
+
+            # Compute distance between centroids
+            centroid_distance = np.linalg.norm(centroid1 - centroid2)
+
+            # If centroids are too far apart, return 0
+            if centroid_distance > 1.0:  # 1 meter threshold
+                return 0.0
+
             # Build KD-tree for second point cloud
             tree = NearestNeighbors(n_neighbors=1, algorithm="ball_tree").fit(points2)
 
@@ -139,8 +151,17 @@ class DatabaseWrapper:
             # Count points with neighbors within threshold
             close_points = np.sum(distances < nn_threshold)
 
-            # Return ratio of close points to total points
-            return close_points / len(points1)
+            # Compute bidirectional similarity
+            tree2 = NearestNeighbors(n_neighbors=1, algorithm="ball_tree").fit(points1)
+            distances2, _ = tree2.kneighbors(points2)
+            close_points2 = np.sum(distances2 < nn_threshold)
+
+            # Use average of both directions
+            similarity = 0.5 * (
+                close_points / len(points1) + close_points2 / len(points2)
+            )
+
+            return similarity
 
         except (ValueError, np.linalg.LinAlgError, RuntimeError) as e:
             print(f"Error in geometric similarity computation: {e}")
@@ -174,7 +195,7 @@ class DatabaseWrapper:
                 geo_sim = self._compute_geometric_similarity(point_cloud, stored_cloud)
 
                 # Only compute semantic similarity if there's geometric overlap
-                if geo_sim > 0:
+                if geo_sim > 0.1:
                     # Compute semantic similarity
                     sem_sim = self._compute_semantic_similarity(
                         embedding, np.array(stored_embedding)
@@ -249,8 +270,11 @@ class DatabaseWrapper:
         metadata: Dict,
         point_cloud: Optional[np.ndarray] = None,
         camera_pose: Optional[Dict] = None,
-    ) -> Optional[str]:
-        """Store a new object or update existing one."""
+    ) -> Tuple[Optional[str], bool]:
+        """
+        Store a new object or update existing one.
+        Returns (object_id, needs_caption) tuple.
+        """
         if camera_pose is None:
             camera_pose = {"x": 0, "y": 0, "z": 0, "qx": 0, "qy": 0, "qz": 0, "qw": 1}
 
@@ -260,14 +284,25 @@ class DatabaseWrapper:
         )
 
         if len(cleaned_points) == 0:
-            return None
+            return None, False
 
         # Find nearby object
         nearby_id = self._find_nearby_object(cleaned_points, processed_embedding)
 
         if nearby_id is not None:
-            return self._merge_objects(
-                nearby_id, processed_embedding, metadata, cleaned_points
+            # Check if object already has a caption
+            results = self.collection.get(ids=[nearby_id], include=["metadatas"])
+            existing_metadata = results["metadatas"][0]
+            needs_caption = (
+                not existing_metadata.get("caption")
+                and nearby_id not in self.pending_captions
+            )
+
+            return (
+                self._merge_objects(
+                    nearby_id, processed_embedding, metadata, cleaned_points
+                ),
+                needs_caption,
             )
 
         # Add new object
@@ -281,7 +316,7 @@ class DatabaseWrapper:
             ids=[new_id],
             metadatas=[metadata],
         )
-        return new_id
+        return new_id, True
 
     def _merge_objects(
         self,
@@ -299,39 +334,45 @@ class DatabaseWrapper:
         old_embedding = np.array(results["embeddings"][0])
         old_point_cloud = self.point_clouds.get(existing_id, np.array([]))
 
-        # Merge point clouds with voxelization
+        # Merge point clouds with improved cleaning
         if len(old_point_cloud) > 0 and len(new_point_cloud) > 0:
             # Combine clouds
             combined_cloud = np.vstack([old_point_cloud, new_point_cloud])
 
             # Remove duplicates and outliers
             if len(combined_cloud) > 0:
+                # Use DBSCAN for clustering
+                labels, _ = DBSCAN(
+                    combined_cloud,
+                    eps=0.05,  # 5cm clustering threshold
+                    min_samples=5,
+                )
+
+                # Keep points from largest cluster
+                if len(np.unique(labels)) > 1:
+                    largest_cluster = np.argmax(np.bincount(labels[labels >= 0]))
+                    merged_cloud = combined_cloud[labels == largest_cluster]
+                else:
+                    merged_cloud = combined_cloud
+
                 # Voxelize to remove duplicates
-                voxel_size = 0.01  # 1cm voxels
+                voxel_size = 0.02  # 2cm voxels
                 voxel_dict = {}
-                for point in combined_cloud:
+                for point in merged_cloud:
                     voxel_key = tuple(np.round(point / voxel_size))
                     if voxel_key not in voxel_dict:
                         voxel_dict[voxel_key] = []
                     voxel_dict[voxel_key].append(point)
 
-                # Get centroids of voxels
                 merged_cloud = np.array(
-                    [np.mean(points, axis=0) for points in voxel_dict.values()]
+                    [np.median(points, axis=0) for points in voxel_dict.values()]
                 )
-
-                # Remove statistical outliers
-                if len(merged_cloud) > 0:
-                    centroid = np.median(merged_cloud, axis=0)
-                    distances = np.linalg.norm(merged_cloud - centroid, axis=1)
-                    inliers = distances < (np.median(distances) + 2 * np.std(distances))
-                    merged_cloud = merged_cloud[inliers]
         else:
             merged_cloud = (
                 new_point_cloud if len(new_point_cloud) > 0 else old_point_cloud
             )
 
-        # Update embedding with weighted average (based on point cloud sizes)
+        # Update embedding with weighted average
         weight_old = len(old_point_cloud) / (
             len(old_point_cloud) + len(new_point_cloud)
         )
@@ -449,11 +490,12 @@ class DatabaseWrapper:
         embedding1 = embedding1 / norm1
         embedding2 = embedding2 / norm2
 
+        # Compute cosine similarity
         similarity = float(np.dot(embedding1, embedding2))
 
-        # Optionally normalize to [0,1]
+        # Normalize from [-1,1] to [0,1] if requested
         if normalize_output:
-            similarity = similarity / 2 + 0.5
+            similarity = (similarity + 1) / 2
 
         return similarity
 
@@ -486,7 +528,8 @@ class DatabaseWrapper:
             results = self.collection.get(include=["metadatas", "embeddings"])
 
             if not results or self.query_embedding is None:
-                return
+                # If no query, use random colors for each object
+                return self._save_with_random_colors(output_path, results)
 
             # Collect all points and their similarities
             all_points = []
@@ -553,3 +596,112 @@ class DatabaseWrapper:
 
         except (ValueError, np.linalg.LinAlgError, RuntimeError) as e:
             print(f"Error saving point cloud to PLY: {str(e)}")
+
+    def _save_with_random_colors(self, output_path: str, results) -> None:
+        """Save point cloud with random colors when no query is present."""
+        all_points = []
+        all_colors = []
+        object_colors = {}
+
+        # Get all IDs from collection
+        all_ids = [str(i) for i in range(self.collection.count())]
+
+        for i, metadata in enumerate(results["metadatas"]):
+            if metadata is None or any(k.startswith("dummy") for k in metadata.keys()):
+                continue
+
+            current_id = all_ids[i]
+            point_cloud = self.point_clouds.get(current_id)
+
+            if point_cloud is not None and len(point_cloud) > 0:
+                # Generate random color for this object if not already assigned
+                if current_id not in object_colors:
+                    hue = random.random()
+                    object_colors[current_id] = tuple(
+                        c / 255 for c in self._hsv_to_rgb(hue, 0.8, 0.8)
+                    )
+
+                color = np.array([object_colors[current_id]] * len(point_cloud))
+                all_points.extend(point_cloud)
+                all_colors.extend(color)
+
+        if all_points:
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(np.array(all_points))
+            pcd.colors = o3d.utility.Vector3dVector(np.array(all_colors))
+            o3d.io.write_point_cloud(output_path, pcd)
+
+    def _hsv_to_rgb(self, h: float, s: float, v: float) -> Tuple[float, float, float]:
+        """
+        Convert HSV color to RGB color.
+
+        Args:
+            h (float): Hue (0-1)
+            s (float): Saturation (0-1)
+            v (float): Value (0-1)
+
+        Returns:
+            Tuple[float, float, float]: RGB color values (0-255)
+        """
+        if s == 0.0:
+            return v, v, v
+
+        i = int(h * 6.0)
+        f = (h * 6.0) - i
+        p = v * (1.0 - s)
+        q = v * (1.0 - s * f)
+        t = v * (1.0 - s * (1.0 - f))
+        i = i % 6
+
+        if i == 0:
+            return v * 255, t * 255, p * 255
+        if i == 1:
+            return q * 255, v * 255, p * 255
+        if i == 2:
+            return p * 255, v * 255, t * 255
+        if i == 3:
+            return p * 255, q * 255, v * 255
+        if i == 4:
+            return t * 255, p * 255, v * 255
+        if i == 5:
+            return v * 255, p * 255, q * 255
+
+    def update_caption_async(self, object_id: str, caption_future: Future):
+        """Store pending caption future and set up callback for when it completes."""
+        self.pending_captions[object_id] = caption_future
+
+        def _update_caption(future):
+            try:
+                caption = future.result()
+                if caption:
+                    # Get existing metadata
+                    results = self.collection.get(
+                        ids=[object_id], include=["metadatas"]
+                    )
+                    metadata = results["metadatas"][0]
+
+                    # Update caption
+                    metadata["caption"] = caption
+
+                    # Update in database
+                    self.collection.update(
+                        ids=[object_id],
+                        metadatas=[metadata],
+                    )
+            except Exception as e:
+                print(f"Error updating caption for object {object_id}: {e}")
+            finally:
+                # Remove from pending captions
+                self.pending_captions.pop(object_id, None)
+
+        caption_future.add_done_callback(_update_caption)
+
+    def get_object_metadata(self, object_id: str) -> Dict:
+        """Get metadata for a specific object."""
+        try:
+            results = self.collection.get(ids=[object_id], include=["metadatas"])
+            if results and results["metadatas"]:
+                return results["metadatas"][0]
+        except Exception as e:
+            print(f"Error getting metadata for object {object_id}: {e}")
+        return {}
