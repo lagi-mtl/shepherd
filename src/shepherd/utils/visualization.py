@@ -1,11 +1,20 @@
+"""
+Visualization utilities for the Shepherd project.
+"""
+
+from typing import Dict, List, Optional
+
 import cv2
-import numpy as np
 import matplotlib.pyplot as plt
-from typing import List, Dict, Optional
+import numpy as np
 import open3d as o3d
 
 
 class VisualizationUtils:
+    """
+    Visualization utilities for the Shepherd project to visualize intermediate results.
+    """
+
     # YOLO class names mapping
     YOLO_CLASSES = {
         0: "person",
@@ -120,8 +129,8 @@ class VisualizationUtils:
                 class_id, f"Class {class_id}"
             )
 
-            x1, y1, x2, y2 = map(int, bbox)
-            cv2.rectangle(viz, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            x_1, y_1, x_2, y_2 = map(int, bbox)
+            cv2.rectangle(viz, (x_1, y_1), (x_2, y_2), (0, 255, 0), 2)
 
             if show_labels or show_conf:
                 label = []
@@ -134,7 +143,7 @@ class VisualizationUtils:
                 cv2.putText(
                     viz,
                     label_text,
-                    (x1, y1 - 10),
+                    (x_1, y_1 - 10),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.5,
                     (0, 255, 0),
@@ -331,13 +340,16 @@ class VisualizationUtils:
                 # Add to visualizer
                 vis.add_geometry(pcd)
 
+                class_id = int(float(metadata.get("class_id", 0)))
+
                 # Print metadata and similarity
                 print(
-                    f"\nObject {i+1} with similarity {similarity:.3f} (normalized: {normalized_similarity:.3f}):"
+                    f"\nObject {i+1} with similarity {similarity:.3f} "
+                    f"(normalized: {normalized_similarity:.3f}):"
                 )
                 print(f"  Caption: {metadata.get('caption', 'No caption')}")
                 print(
-                    f"  Class: {VisualizationUtils.YOLO_CLASSES.get(int(float(metadata.get('class_id', 0))), 'Unknown')}"
+                    f"  Class: {VisualizationUtils.YOLO_CLASSES.get(class_id, 'Unknown')}"
                 )
                 print(f"  Confidence: {float(metadata.get('confidence', 0)):.2f}")
 

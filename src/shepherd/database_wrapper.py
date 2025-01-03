@@ -1,3 +1,7 @@
+"""
+Database wrapper.
+"""
+
 import os
 import time
 from typing import Dict, List, Optional, Tuple
@@ -13,6 +17,10 @@ from .utils.camera import CameraUtils
 
 
 class DatabaseWrapper:
+    """
+    Database wrapper.
+    """
+
     def __init__(
         self,
         collection_name: str = "detection_embeddings",
@@ -44,8 +52,6 @@ class DatabaseWrapper:
     def _clean_point_cloud(
         self,
         point_cloud: np.ndarray,
-        mask: np.ndarray = None,
-        camera_pose: Optional[Dict] = None,
     ) -> np.ndarray:
         """Clean point cloud using nearest neighbors and line-of-sight filtering."""
         if point_cloud is None or len(point_cloud) < self.cluster_min_samples:
@@ -70,7 +76,7 @@ class DatabaseWrapper:
 
             return point_cloud
 
-        except Exception as e:
+        except (ValueError, np.linalg.LinAlgError, RuntimeError) as e:
             print(f"Error in point cloud cleaning: {e}")
             return point_cloud
 
@@ -112,7 +118,7 @@ class DatabaseWrapper:
 
             return cleaned_points, embedding
 
-        except Exception as e:
+        except (ValueError, np.linalg.LinAlgError, RuntimeError) as e:
             print(f"Error in detection processing: {e}")
             return np.array([]), embedding
 
@@ -136,7 +142,7 @@ class DatabaseWrapper:
             # Return ratio of close points to total points
             return close_points / len(points1)
 
-        except Exception as e:
+        except (ValueError, np.linalg.LinAlgError, RuntimeError) as e:
             print(f"Error in geometric similarity computation: {e}")
             return 0.0
 
@@ -233,7 +239,7 @@ class DatabaseWrapper:
                     voxelized_points.append(centroid)
 
             return np.array(voxelized_points)
-        except Exception as e:
+        except (ValueError, np.linalg.LinAlgError, RuntimeError) as e:
             print(f"Error in point cloud merging: {e}")
             return cleaned_cloud  # Return cleaned cloud if voxelization fails
 
@@ -263,19 +269,19 @@ class DatabaseWrapper:
             return self._merge_objects(
                 nearby_id, processed_embedding, metadata, cleaned_points
             )
-        else:
-            # Add new object
-            new_id = str(
-                self.collection.count() if self.collection.count() is not None else 0
-            )
 
-            self.point_clouds[new_id] = cleaned_points
-            self.collection.add(
-                embeddings=[processed_embedding.tolist()],
-                ids=[new_id],
-                metadatas=[metadata],
-            )
-            return new_id
+        # Add new object
+        new_id = str(
+            self.collection.count() if self.collection.count() is not None else 0
+        )
+
+        self.point_clouds[new_id] = cleaned_points
+        self.collection.add(
+            embeddings=[processed_embedding.tolist()],
+            ids=[new_id],
+            metadatas=[metadata],
+        )
+        return new_id
 
     def _merge_objects(
         self,
@@ -545,5 +551,5 @@ class DatabaseWrapper:
                 # Save to PLY file
                 o3d.io.write_point_cloud(output_path, pcd)
 
-        except Exception as e:
+        except (ValueError, np.linalg.LinAlgError, RuntimeError) as e:
             print(f"Error saving point cloud to PLY: {str(e)}")

@@ -1,12 +1,21 @@
-from transformers import BlipProcessor, BlipForConditionalGeneration
+"""
+BLIP model implementation.
+"""
+
+import cv2
+import numpy as np
 import torch
 from PIL import Image
-import numpy as np
-import cv2
+from transformers import BlipForConditionalGeneration, BlipProcessor
+
 from ..captioning_model import CaptioningModel
 
 
 class BLIP(CaptioningModel):
+    """
+    BLIP model implementation.
+    """
+
     def load_model(self):
         """Load BLIP model and processor."""
         model_name = "Salesforce/blip-image-captioning-base"
@@ -37,7 +46,7 @@ class BLIP(CaptioningModel):
             with torch.no_grad():
                 outputs = self.model.generate(**inputs, max_length=50, num_beams=5)
             return self.postprocess(outputs)
-        except Exception as e:
+        except (ValueError, np.linalg.LinAlgError, RuntimeError) as e:
             print(f"Error generating caption: {str(e)}")
             return ""
 

@@ -23,7 +23,17 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        python -m pip install black
+        python -m pip install -r requirements.txt
+        python -m pip install .
+        python -m pip install black pylint
     - name: Check formatting with black
       run: |
         black --check .
+    - name: Lint with pylint
+      run: |
+        pylint --rcfile=.pylintrc ./src > pylint_report.txt || true
+        score=$(grep "Your code has been rated at" pylint_report.txt | awk '{print $7}' | cut -d'/' -f1)
+        if (( $(echo "$score < 9.0" | bc -l) )); then
+          echo "Pylint score ($score) is below 0.90. Failing the workflow."
+          exit 1
+        fi

@@ -1,12 +1,21 @@
-from pathlib import Path
-from typing import Dict, Any, Optional
+"""
+Configuration base file for Shepherd.
+"""
+
 import os
+from pathlib import Path
+from typing import Any, Optional
+
 import torch
-import numpy as np
+
 from .utils.camera import CameraUtils
 
 
 class ShepherdConfig:
+    """
+    Configuration object for Shepherd.
+    """
+
     def __init__(
         self,
         model_dir: Optional[str] = None,
@@ -74,7 +83,7 @@ class ShepherdConfig:
         try:
             current = self
             for part in key.split("."):
-                if hasattr(current, part):
+                if hasattr(self, part):
                     current = getattr(current, part)
                 elif isinstance(current, dict):
                     current = current[part]

@@ -1,11 +1,21 @@
+"""
+YOLO model implementation.
+"""
+
+from typing import Any, Dict, List
+
+import numpy as np
 import torch
 from ultralytics import YOLO as UltralyticsYOLO
-from typing import List, Dict, Any
-import numpy as np
+
 from ..detection_model import DetectionModel
 
 
 class YOLO(DetectionModel):
+    """
+    YOLO model implementation.
+    """
+
     def load_model(self):
         """Load YOLO model."""
         self.model = UltralyticsYOLO(self.model_path)

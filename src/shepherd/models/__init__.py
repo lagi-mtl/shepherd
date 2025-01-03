@@ -1,9 +1,13 @@
+"""
+Models import
+"""
+
 from .base_model import BaseModel
-from .detection_model import DetectionModel
-from .segmentation_model import SegmentationModel
 from .captioning_model import CaptioningModel
 from .depth_model import DepthModel
+from .detection_model import DetectionModel
 from .embedding_model import EmbeddingModel
+from .segmentation_model import SegmentationModel
 
 __all__ = [
     "BaseModel",

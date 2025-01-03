@@ -1,14 +1,23 @@
-import cv2
-import torch
-import numpy as np
+"""
+Shepherd class.
+"""
+
 from typing import Dict, List, Optional
 
-from .models.implementations import YOLO, SAM, BLIP, DAN, CLIP
+import cv2
+import numpy as np
+import torch
+
 from .database_wrapper import DatabaseWrapper
+from .models.implementations import BLIP, CLIP, DAN, SAM, YOLO
 from .shepherd_config import ShepherdConfig
 
 
 class Shepherd:
+    """
+    Shepherd class that handles the whole vision pipeline.
+    """
+
     def __init__(self, config: ShepherdConfig = None, database: DatabaseWrapper = None):
         """
         Initialize the Shepherd class with all required models and configurations.
@@ -219,14 +228,14 @@ class Shepherd:
         height, width = depth_frame.shape
 
         # Create meshgrid of pixel coordinates
-        xx, yy = np.meshgrid(np.arange(width), np.arange(height))
+        x_coords, y_coords = np.meshgrid(np.arange(width), np.arange(height))
 
         # Apply mask
         valid_points = mask > 0
 
         # Get valid coordinates and depths
-        x = xx[valid_points]
-        y = yy[valid_points]
+        x = x_coords[valid_points]
+        y = y_coords[valid_points]
         z = depth_frame[valid_points]
 
         # Filter out invalid depths
@@ -239,12 +248,12 @@ class Shepherd:
             return np.array([])
 
         # Convert to 3D coordinates using camera parameters
-        X = (x - self.config.camera.cx) * z / self.config.camera.fx
-        Y = (y - self.config.camera.cy) * z / self.config.camera.fy
-        Z = z
+        x_coords = (x - self.config.camera.cx) * z / self.config.camera.fx
+        y_coords = (y - self.config.camera.cy) * z / self.config.camera.fy
+        z_coords = z
 
         # Stack coordinates
-        points = np.stack([X, Y, Z], axis=1)
+        points = np.stack([x_coords, y_coords, z_coords], axis=1)
 
         # Remove outliers
         if len(points) > 0:

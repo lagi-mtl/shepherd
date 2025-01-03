@@ -1,10 +1,18 @@
-from typing import Dict, Literal, Tuple
+"""
+Camera utilities to change camera pose and transform point clouds.
+"""
+
+from typing import Dict, Literal
 
 import numpy as np
 from scipy.spatial.transform import Rotation
 
 
 class CameraUtils:
+    """
+    Camera utilities.
+    """
+
     # Coordinate system definitions
     COORDINATE_SYSTEMS = {
         "ros": {
@@ -86,7 +94,7 @@ class CameraUtils:
         # 2. Apply camera pose transformation
         if camera_pose:
             # Get world rotation from quaternion
-            R = Rotation.from_quat(
+            rotation_matrix = Rotation.from_quat(
                 [
                     camera_pose["qx"],
                     camera_pose["qy"],
@@ -96,9 +104,11 @@ class CameraUtils:
             ).as_matrix()
 
             # Apply rotation and translation
-            points_fixed = (R @ points_fixed.T).T
-            t = np.array([camera_pose["x"], camera_pose["y"], camera_pose["z"]])
-            points_fixed = points_fixed + t
+            points_fixed = (rotation_matrix @ points_fixed.T).T
+            translation_vector = np.array(
+                [camera_pose["x"], camera_pose["y"], camera_pose["z"]]
+            )
+            points_fixed = points_fixed + translation_vector
 
         # 3. Add camera height and system-specific offset
         height_offset = np.zeros(3)
