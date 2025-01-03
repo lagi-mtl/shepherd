@@ -6,10 +6,10 @@ from .depth_model import DepthModel
 from .embedding_model import EmbeddingModel
 
 __all__ = [
-    'BaseModel',
-    'DetectionModel',
-    'SegmentationModel',
-    'CaptioningModel',
-    'DepthModel',
-    'EmbeddingModel'
-] 
+    "BaseModel",
+    "DetectionModel",
+    "SegmentationModel",
+    "CaptioningModel",
+    "DepthModel",
+    "EmbeddingModel",
+]
