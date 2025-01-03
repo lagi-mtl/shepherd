@@ -27,7 +27,7 @@ class DatabaseWrapper:
         collection_name: str = "detection_embeddings",
         camera_utils: Optional[CameraUtils] = None,
         distance_threshold: float = 1.5,
-        similarity_threshold: float = 1.5,
+        similarity_threshold: float = 0.3,
         cluster_eps: float = 0.2,
         cluster_min_samples: int = 3,
     ):
@@ -124,13 +124,24 @@ class DatabaseWrapper:
             return np.array([]), embedding
 
     def _compute_geometric_similarity(
-        self, points1: np.ndarray, points2: np.ndarray, nn_threshold: float = 0.05
+        self, points1: np.ndarray, points2: np.ndarray, nn_threshold: float = 0.1
     ) -> float:
         """Compute geometric similarity using nearest neighbor ratio."""
         if len(points1) == 0 or len(points2) == 0:
             return 0.0
 
         try:
+            # Compute centroids
+            centroid1 = np.mean(points1, axis=0)
+            centroid2 = np.mean(points2, axis=0)
+
+            # Compute distance between centroids
+            centroid_distance = np.linalg.norm(centroid1 - centroid2)
+
+            # If centroids are too far apart, return 0
+            if centroid_distance > 1.0:  # 1 meter threshold
+                return 0.0
+
             # Build KD-tree for second point cloud
             tree = NearestNeighbors(n_neighbors=1, algorithm="ball_tree").fit(points2)
 
@@ -140,8 +151,17 @@ class DatabaseWrapper:
             # Count points with neighbors within threshold
             close_points = np.sum(distances < nn_threshold)
 
-            # Return ratio of close points to total points
-            return close_points / len(points1)
+            # Compute bidirectional similarity
+            tree2 = NearestNeighbors(n_neighbors=1, algorithm="ball_tree").fit(points1)
+            distances2, _ = tree2.kneighbors(points2)
+            close_points2 = np.sum(distances2 < nn_threshold)
+
+            # Use average of both directions
+            similarity = 0.5 * (
+                close_points / len(points1) + close_points2 / len(points2)
+            )
+
+            return similarity
 
         except (ValueError, np.linalg.LinAlgError, RuntimeError) as e:
             print(f"Error in geometric similarity computation: {e}")
@@ -175,7 +195,7 @@ class DatabaseWrapper:
                 geo_sim = self._compute_geometric_similarity(point_cloud, stored_cloud)
 
                 # Only compute semantic similarity if there's geometric overlap
-                if geo_sim > 0:
+                if geo_sim > 0.1:
                     # Compute semantic similarity
                     sem_sim = self._compute_semantic_similarity(
                         embedding, np.array(stored_embedding)
@@ -300,39 +320,45 @@ class DatabaseWrapper:
         old_embedding = np.array(results["embeddings"][0])
         old_point_cloud = self.point_clouds.get(existing_id, np.array([]))
 
-        # Merge point clouds with voxelization
+        # Merge point clouds with improved cleaning
         if len(old_point_cloud) > 0 and len(new_point_cloud) > 0:
             # Combine clouds
             combined_cloud = np.vstack([old_point_cloud, new_point_cloud])
 
             # Remove duplicates and outliers
             if len(combined_cloud) > 0:
+                # Use DBSCAN for clustering
+                labels, _ = DBSCAN(
+                    combined_cloud,
+                    eps=0.05,  # 5cm clustering threshold
+                    min_samples=5,
+                )
+
+                # Keep points from largest cluster
+                if len(np.unique(labels)) > 1:
+                    largest_cluster = np.argmax(np.bincount(labels[labels >= 0]))
+                    merged_cloud = combined_cloud[labels == largest_cluster]
+                else:
+                    merged_cloud = combined_cloud
+
                 # Voxelize to remove duplicates
-                voxel_size = 0.01  # 1cm voxels
+                voxel_size = 0.02  # 2cm voxels
                 voxel_dict = {}
-                for point in combined_cloud:
+                for point in merged_cloud:
                     voxel_key = tuple(np.round(point / voxel_size))
                     if voxel_key not in voxel_dict:
                         voxel_dict[voxel_key] = []
                     voxel_dict[voxel_key].append(point)
 
-                # Get centroids of voxels
                 merged_cloud = np.array(
-                    [np.mean(points, axis=0) for points in voxel_dict.values()]
+                    [np.median(points, axis=0) for points in voxel_dict.values()]
                 )
-
-                # Remove statistical outliers
-                if len(merged_cloud) > 0:
-                    centroid = np.median(merged_cloud, axis=0)
-                    distances = np.linalg.norm(merged_cloud - centroid, axis=1)
-                    inliers = distances < (np.median(distances) + 2 * np.std(distances))
-                    merged_cloud = merged_cloud[inliers]
         else:
             merged_cloud = (
                 new_point_cloud if len(new_point_cloud) > 0 else old_point_cloud
             )
 
-        # Update embedding with weighted average (based on point cloud sizes)
+        # Update embedding with weighted average
         weight_old = len(old_point_cloud) / (
             len(old_point_cloud) + len(new_point_cloud)
         )
