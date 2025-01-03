@@ -6,6 +6,7 @@ from typing import Any, Dict, List
 
 import numpy as np
 import torch
+from ultralytics import YOLO as UltralyticsYOLO
 
 from ..detection_model import DetectionModel
 

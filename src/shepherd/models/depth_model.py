@@ -14,9 +14,6 @@ class DepthModel(BaseModel):
     Base class for depth estimation models.
     """
 
-    def __init__(self, model_path: str, device: str):
-        super().__init__(model_path, device)
-
     @abstractmethod
     def estimate_depth(self, image: np.ndarray) -> np.ndarray:
         """

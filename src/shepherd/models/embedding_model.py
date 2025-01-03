@@ -14,9 +14,6 @@ class EmbeddingModel(BaseModel):
     Base class for embedding models.
     """
 
-    def __init__(self, model_path: str, device: str):
-        super().__init__(model_path, device)
-
     @abstractmethod
     def encode_image(self, image: np.ndarray) -> np.ndarray:
         """

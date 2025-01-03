@@ -1,3 +1,7 @@
+"""
+Database wrapper.
+"""
+
 import os
 import time
 from typing import Dict, List, Optional, Tuple
@@ -13,6 +17,10 @@ from .utils.camera import CameraUtils
 
 
 class DatabaseWrapper:
+    """
+    Database wrapper.
+    """
+
     def __init__(
         self,
         collection_name: str = "detection_embeddings",
@@ -44,8 +52,6 @@ class DatabaseWrapper:
     def _clean_point_cloud(
         self,
         point_cloud: np.ndarray,
-        mask: np.ndarray = None,
-        camera_pose: Optional[Dict] = None,
     ) -> np.ndarray:
         """Clean point cloud using nearest neighbors and line-of-sight filtering."""
         if point_cloud is None or len(point_cloud) < self.cluster_min_samples:

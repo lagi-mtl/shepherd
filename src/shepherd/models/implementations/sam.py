@@ -76,7 +76,8 @@ class SAM(SegmentationModel):
         processed_masks = []
         for mask in masks:
             resized_mask = cv2.resize(
-                mask.astype(float), (self.original_width, self.original_height)
+                mask.astype(float),
+                dsize=(int(self.original_width), int(self.original_height)),
             )
             processed_masks.append(resized_mask > 0.5)
         return processed_masks

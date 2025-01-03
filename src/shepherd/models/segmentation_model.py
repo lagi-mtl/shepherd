@@ -15,9 +15,6 @@ class SegmentationModel(BaseModel):
     Base class for segmentation models.
     """
 
-    def __init__(self, model_path: str, device: str):
-        super().__init__(model_path, device)
-
     @abstractmethod
     def segment(self, image: np.ndarray) -> List[np.ndarray]:
         """

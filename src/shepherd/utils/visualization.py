@@ -1,3 +1,7 @@
+"""
+Visualization utilities for the Shepherd project.
+"""
+
 from typing import Dict, List, Optional
 
 import cv2
@@ -7,6 +11,10 @@ import open3d as o3d
 
 
 class VisualizationUtils:
+    """
+    Visualization utilities for the Shepherd project to visualize intermediate results.
+    """
+
     # YOLO class names mapping
     YOLO_CLASSES = {
         0: "person",
@@ -334,7 +342,8 @@ class VisualizationUtils:
 
                 # Print metadata and similarity
                 print(
-                    f"\nObject {i+1} with similarity {similarity:.3f} (normalized: {normalized_similarity:.3f}):"
+                    f"\nObject {i+1} with similarity {similarity:.3f} "
+                    f"(normalized: {normalized_similarity:.3f}):"
                 )
                 print(f"  Caption: {metadata.get('caption', 'No caption')}")
                 print(

@@ -14,9 +14,6 @@ class CaptioningModel(BaseModel):
     Base class for captioning models.
     """
 
-    def __init__(self, model_path: str, device: str):
-        super().__init__(model_path, device)
-
     @abstractmethod
     def generate_caption(self, image: np.ndarray) -> str:
         """
