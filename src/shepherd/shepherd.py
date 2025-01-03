@@ -2,10 +2,8 @@
 Shepherd class.
 """
 
-import time
 from concurrent.futures import ThreadPoolExecutor
-from re import S
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional
 
 import cv2
 import numpy as np
@@ -81,8 +79,6 @@ class Shepherd:
         if self.config.default_query:
             self.update_query(self.config.default_query)
 
-        self.current_time = time.time()
-
     def update_query(self, query_text: str):
         """Update the query and compute its embedding."""
         self.config.default_query = query_text
@@ -110,21 +106,10 @@ class Shepherd:
     ):
         """Process a single frame through the vision pipeline."""
         # Run detection
-        print(f"time taken : {time.time() - self.current_time:.2f} seconds")
-        self.current_time = time.time()
-
-        start_time = time.time()
-
         detections = self._process_detections(frame)
 
-        detection_time = time.time()
-        print(f"Detection time: {detection_time - start_time:.2f} seconds")
-
         # Get segmentation masks for detections
-        start_time = time.time()
         masks = self._process_segments(frame, detections)
-        segmentation_time = time.time()
-        print(f"Segmentation time: {segmentation_time - detection_time:.2f} seconds")
 
         # If no depth frame provided, estimate it using DAN
         if depth_frame is None and self.depth_estimator is not None:
@@ -199,7 +184,7 @@ class Shepherd:
                                 "depth_frame": depth_frame,
                                 "object_id": object_id,
                                 "similarity": similarity,
-                                "caption": caption,  # Include caption in results
+                                "caption": caption,
                             }
                         )
 

@@ -96,14 +96,11 @@ class DatabaseWrapper:
             point_cloud = self.camera.transform_point_cloud(point_cloud, camera_pose)
 
             # Run DBSCAN directly on point cloud
-            start_time = time.time()
             labels, _ = DBSCAN(
                 point_cloud,
                 eps=self.cluster_eps,
                 min_samples=self.cluster_min_samples,
             )
-            end_time = time.time()
-            print(f"DBSCAN clustering time: {end_time - start_time} seconds")
 
             # Get largest cluster
             unique_labels = np.unique(labels)
