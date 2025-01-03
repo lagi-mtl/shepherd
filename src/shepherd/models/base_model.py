@@ -1,10 +1,19 @@
+"""
+Base model class.
+"""
+
 from abc import ABC, abstractmethod
-import torch
-import numpy as np
 from typing import Any, Dict
+
+import numpy as np
+import torch
 
 
 class BaseModel(ABC):
+    """
+    Base class for all models.
+    """
+
     def __init__(self, model_path: str, device: str):
         """
         Initialize base model.
@@ -21,14 +30,11 @@ class BaseModel(ABC):
     @abstractmethod
     def load_model(self):
         """Load model from path."""
-        pass
 
     @abstractmethod
     def preprocess(self, image: np.ndarray) -> torch.Tensor:
         """Preprocess input data."""
-        pass
 
     @abstractmethod
     def postprocess(self, output: Any) -> Dict:
         """Postprocess model output."""
-        pass

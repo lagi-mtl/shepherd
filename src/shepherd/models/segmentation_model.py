@@ -1,10 +1,20 @@
+"""
+Segmentation model.
+"""
+
 from abc import abstractmethod
-from typing import List, Dict
+from typing import List
+
 import numpy as np
+
 from .base_model import BaseModel
 
 
 class SegmentationModel(BaseModel):
+    """
+    Base class for segmentation models.
+    """
+
     def __init__(self, model_path: str, device: str):
         super().__init__(model_path, device)
 
@@ -14,4 +24,3 @@ class SegmentationModel(BaseModel):
         Segment objects in image.
         Returns list of segmentation masks.
         """
-        pass

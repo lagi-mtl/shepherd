@@ -1,10 +1,20 @@
+"""
+Detection model for object detection.
+"""
+
 from abc import abstractmethod
-from typing import List, Dict
+from typing import Dict, List
+
 import numpy as np
+
 from .base_model import BaseModel
 
 
 class DetectionModel(BaseModel):
+    """
+    Base class for object detection models.
+    """
+
     def __init__(
         self,
         model_path: str,
@@ -36,4 +46,3 @@ class DetectionModel(BaseModel):
         Returns:
             List[Dict]: List of detections, each containing bbox, confidence, and class_id
         """
-        pass

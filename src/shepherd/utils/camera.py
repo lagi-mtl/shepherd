@@ -1,10 +1,18 @@
-from typing import Dict, Literal, Tuple
+"""
+Camera utilities to change camera pose and transform point clouds.
+"""
+
+from typing import Dict, Literal
 
 import numpy as np
 from scipy.spatial.transform import Rotation
 
 
 class CameraUtils:
+    """
+    Camera utilities.
+    """
+
     # Coordinate system definitions
     COORDINATE_SYSTEMS = {
         "ros": {

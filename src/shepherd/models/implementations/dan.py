@@ -1,13 +1,21 @@
-import torch
-from transformers import pipeline
-from PIL import Image
-import numpy as np
+"""
+DAN model implementation.
+"""
+
 import cv2
-from typing import Any
+import numpy as np
+import torch
+from PIL import Image
+from transformers import pipeline
+
 from ..depth_model import DepthModel
 
 
 class DAN(DepthModel):
+    """
+    DAN model implementation.
+    """
+
     def load_model(self):
         """Load Depth Anything model."""
         self.model = pipeline(

@@ -1,7 +1,8 @@
+from typing import Dict, List, Optional
+
 import cv2
-import numpy as np
 import matplotlib.pyplot as plt
-from typing import List, Dict, Optional
+import numpy as np
 import open3d as o3d
 
 
@@ -120,8 +121,8 @@ class VisualizationUtils:
                 class_id, f"Class {class_id}"
             )
 
-            x1, y1, x2, y2 = map(int, bbox)
-            cv2.rectangle(viz, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            x_1, y_1, x_2, y_2 = map(int, bbox)
+            cv2.rectangle(viz, (x_1, y_1), (x_2, y_2), (0, 255, 0), 2)
 
             if show_labels or show_conf:
                 label = []
@@ -134,7 +135,7 @@ class VisualizationUtils:
                 cv2.putText(
                     viz,
                     label_text,
-                    (x1, y1 - 10),
+                    (x_1, y_1 - 10),
                     cv2.FONT_HERSHEY_SIMPLEX,
                     0.5,
                     (0, 255, 0),

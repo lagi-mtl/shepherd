@@ -1,12 +1,21 @@
-from pathlib import Path
-from typing import Dict, Any, Optional
+"""
+Configuration base file for Shepherd.
+"""
+
 import os
+from pathlib import Path
+from typing import Any, Optional
+
 import torch
-import numpy as np
+
 from .utils.camera import CameraUtils
 
 
 class ShepherdConfig:
+    """
+    Configuration object for Shepherd.
+    """
+
     def __init__(
         self,
         model_dir: Optional[str] = None,

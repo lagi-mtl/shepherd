@@ -1,13 +1,21 @@
-import torch
+"""
+CLIP model implementation.
+"""
+
 import clip
-from PIL import Image
-import numpy as np
-from typing import List
-from ..embedding_model import EmbeddingModel
 import cv2
+import numpy as np
+import torch
+from PIL import Image
+
+from ..embedding_model import EmbeddingModel
 
 
 class CLIP(EmbeddingModel):
+    """
+    CLIP model implementation.
+    """
+
     def load_model(self):
         """Load CLIP model."""
         self.model, self.preprocess_fn = clip.load("ViT-B/32", device=self.device)

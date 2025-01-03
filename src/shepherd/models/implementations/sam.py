@@ -1,12 +1,21 @@
-import torch
-from ultralytics.models.fastsam import FastSAMPredictor
-import numpy as np
-from typing import List, Dict
-from ..segmentation_model import SegmentationModel
+"""
+SAM model implementation.
+"""
+
+from typing import Dict, List
+
 import cv2
+import numpy as np
+from ultralytics.models.fastsam import FastSAMPredictor
+
+from ..segmentation_model import SegmentationModel
 
 
 class SAM(SegmentationModel):
+    """
+    SAM model implementation.
+    """
+
     def __init__(
         self,
         model_path: str,
