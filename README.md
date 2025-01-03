@@ -6,12 +6,10 @@ Shepherd is a computer vision pipeline and world modeling system designed for ea
 
 ## TODO
 
-- [ ] Fix world coordinate transformations for consistent object positioning
-- [ ] Optimize point cloud merging by utilizing the database querying
-- [ ] Implement LLM for reverse-querying
-- [ ] Add reverse-querying based on object captions
-- [ ] Add path finding based on reverse-query
-- [ ] Add RL-based action completion from vocal queries 
+- [ ] Add docker support for easier deployment
+- [ ] Improve inference speed
+- [ ] Add live 3D visualization
+- [ ] Benchmark inference speed and memory usage on jetson
 
 ## Documentation
 
