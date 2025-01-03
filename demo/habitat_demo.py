@@ -134,7 +134,7 @@ class HabitatEnv(gym.Env):
         agent_state = self.agent.get_state()
         position = agent_state.position
 
-        # Convert Habitat's Y-axis rotation to Z-axis rotation for ROS compatibility
+        # Convert Habitat's quaternion to proper camera pose
         habitat_rotation = agent_state.rotation
         # Create rotation matrix from habitat quaternion
         R = Rotation.from_quat(
@@ -145,14 +145,14 @@ class HabitatEnv(gym.Env):
                 habitat_rotation.w,
             ]
         )
-        # Convert to euler angles
-        euler = R.as_euler("xyz")
-        # Move rotation from Y to Z axis
-        print(f"Euler angles: {euler}")
-        new_euler = [euler[0], euler[1], euler[2]]  # Take Y rotation and put it in Z
-        # Convert back to quaternion
-        new_rotation = Rotation.from_euler("xyz", new_euler)
-        quat = new_rotation.as_quat()
+
+        # Habitat uses a different coordinate system, so we need to transform
+        # Convert from Habitat (Y-up, -Z forward) to standard (Z-up, X forward)
+        correction = Rotation.from_euler("xyz", [0, 0, -90], degrees=True)
+        R = correction * R
+
+        # Get the final quaternion
+        quat = R.as_quat()
 
         return {
             "x": float(position[0]),
@@ -207,8 +207,8 @@ class HabitatEnv(gym.Env):
                 f"Agent Position: ({agent_pose['x']:.2f}, {agent_pose['y']:.2f}, {agent_pose['z']:.2f})"
             )
 
+            # Process frame and update point cloud
             results = self.shepherd.process_frame(rgb_bgr, depth, agent_pose)
-
             self.last_frame_results = results
             self.last_frame_time = time.time()
 
@@ -334,10 +334,11 @@ def main():
         width=256,
         height=256,
         fov=1.57,  # 90 degrees FOV
-        camera_height=1.0,
+        camera_height=1.5,
         camera_pitch=0.0,
         camera_yaw=0.0,
         camera_roll=0.0,
+        coordinate_frame="habitat",
     )
 
     # Print initial configuration
