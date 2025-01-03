@@ -5,6 +5,7 @@ Database wrapper.
 import os
 import random
 import time
+from concurrent.futures import Future
 from typing import Dict, List, Optional, Tuple, Union
 
 import chromadb
@@ -49,6 +50,7 @@ class DatabaseWrapper:
         # Initialize nearest neighbors
         self.nn = NearestNeighbors(n_neighbors=3, algorithm="ball_tree")
         self.query_embedding = None  # Add query embedding storage
+        self.pending_captions = {}  # Store pending caption futures
 
     def _clean_point_cloud(
         self,
@@ -85,6 +87,7 @@ class DatabaseWrapper:
         self, point_cloud: np.ndarray, embedding: np.ndarray, camera_pose: Dict
     ) -> Tuple[np.ndarray, np.ndarray]:
         """Process new detection with DBSCAN clustering and pose transformation."""
+
         if point_cloud is None or len(point_cloud) < self.cluster_min_samples:
             return np.array([]), embedding
 
@@ -270,8 +273,11 @@ class DatabaseWrapper:
         metadata: Dict,
         point_cloud: Optional[np.ndarray] = None,
         camera_pose: Optional[Dict] = None,
-    ) -> Optional[str]:
-        """Store a new object or update existing one."""
+    ) -> Tuple[Optional[str], bool]:
+        """
+        Store a new object or update existing one.
+        Returns (object_id, needs_caption) tuple.
+        """
         if camera_pose is None:
             camera_pose = {"x": 0, "y": 0, "z": 0, "qx": 0, "qy": 0, "qz": 0, "qw": 1}
 
@@ -281,14 +287,25 @@ class DatabaseWrapper:
         )
 
         if len(cleaned_points) == 0:
-            return None
+            return None, False
 
         # Find nearby object
         nearby_id = self._find_nearby_object(cleaned_points, processed_embedding)
 
         if nearby_id is not None:
-            return self._merge_objects(
-                nearby_id, processed_embedding, metadata, cleaned_points
+            # Check if object already has a caption
+            results = self.collection.get(ids=[nearby_id], include=["metadatas"])
+            existing_metadata = results["metadatas"][0]
+            needs_caption = (
+                not existing_metadata.get("caption")
+                and nearby_id not in self.pending_captions
+            )
+
+            return (
+                self._merge_objects(
+                    nearby_id, processed_embedding, metadata, cleaned_points
+                ),
+                needs_caption,
             )
 
         # Add new object
@@ -302,7 +319,7 @@ class DatabaseWrapper:
             ids=[new_id],
             metadatas=[metadata],
         )
-        return new_id
+        return new_id, True
 
     def _merge_objects(
         self,
@@ -476,11 +493,12 @@ class DatabaseWrapper:
         embedding1 = embedding1 / norm1
         embedding2 = embedding2 / norm2
 
+        # Compute cosine similarity
         similarity = float(np.dot(embedding1, embedding2))
 
-        # Optionally normalize to [0,1]
+        # Normalize from [-1,1] to [0,1] if requested
         if normalize_output:
-            similarity = similarity / 2 + 0.5
+            similarity = (similarity + 1) / 2
 
         return similarity
 
@@ -500,9 +518,7 @@ class DatabaseWrapper:
 
     def save_point_cloud_ply(self, output_path: str):
         """
-        Save the current point clouds with colors to a PLY file.
-        If query_embedding exists, colors represent similarity scores.
-        Otherwise, each unique object gets a random uniform color.
+        Save the current point clouds with similarity colors to a PLY file.
 
         Args:
             output_path (str): Path where to save the PLY file
@@ -514,15 +530,16 @@ class DatabaseWrapper:
             # Get all objects
             results = self.collection.get(include=["metadatas", "embeddings"])
 
-            # Collect all points and their colors
+            if not results or self.query_embedding is None:
+                # If no query, use random colors for each object
+                return self._save_with_random_colors(output_path, results)
+
+            # Collect all points and their similarities
             all_points = []
-            all_colors = []
+            all_similarities = []
 
             # Get all IDs from collection
             all_ids = [str(i) for i in range(self.collection.count())]
-
-            # Generate random colors for each object if no query
-            object_colors: Dict[str, Tuple[float, float, float]] = {}
 
             for i, (metadata, embedding) in enumerate(
                 zip(results["metadatas"], results["embeddings"])
@@ -538,43 +555,84 @@ class DatabaseWrapper:
                 # Get point cloud
                 point_cloud = self.point_clouds.get(current_id)
                 if point_cloud is not None and len(point_cloud) > 0:
-                    if self.query_embedding is not None:
-                        # Use similarity-based coloring
-                        similarity = self._compute_semantic_similarity(
-                            np.array(embedding), self.query_embedding
-                        )
-                        # Create red gradient based on similarity
-                        color = np.array([[similarity, 0, 0]] * len(point_cloud))
-                    else:
-                        # Generate random color for this object if not already assigned
-                        if current_id not in object_colors:
-                            # Generate bright, distinguishable colors
-                            hue = random.random()  # Random hue
-                            object_colors[current_id] = tuple(
-                                c / 255 for c in self._hsv_to_rgb(hue, 0.8, 0.8)
-                            )
-
-                        # Use the object's random color
-                        color = np.array([object_colors[current_id]] * len(point_cloud))
+                    # Compute similarity with query embedding
+                    similarity = self._compute_semantic_similarity(
+                        np.array(embedding), self.query_embedding
+                    )
 
                     all_points.extend(point_cloud)
-                    all_colors.extend(color)
+                    all_similarities.extend([similarity] * len(point_cloud))
 
             if all_points:
                 # Convert to numpy arrays
                 all_points = np.array(all_points)
-                all_colors = np.array(all_colors)
+                all_similarities = np.array(all_similarities)
 
                 # Create Open3D point cloud
                 pcd = o3d.geometry.PointCloud()
                 pcd.points = o3d.utility.Vector3dVector(all_points)
-                pcd.colors = o3d.utility.Vector3dVector(all_colors)
+
+                # Normalize similarities to [0, 1] range
+                if (
+                    len(np.unique(all_similarities)) > 1
+                ):  # Only normalize if we have different values
+                    min_similarity = np.min(all_similarities)
+                    max_similarity = np.max(all_similarities)
+                    normalized_similarities = (all_similarities - min_similarity) / (
+                        max_similarity - min_similarity
+                    )
+                else:
+                    normalized_similarities = all_similarities
+
+                # Map similarity to black-to-red (R=normalized similarity, G=0, B=0)
+                colors = np.column_stack(
+                    (
+                        normalized_similarities,
+                        np.zeros_like(normalized_similarities),
+                        np.zeros_like(normalized_similarities),
+                    )
+                )
+                pcd.colors = o3d.utility.Vector3dVector(colors)
 
                 # Save to PLY file
                 o3d.io.write_point_cloud(output_path, pcd)
 
         except (ValueError, np.linalg.LinAlgError, RuntimeError) as e:
             print(f"Error saving point cloud to PLY: {str(e)}")
+
+    def _save_with_random_colors(self, output_path: str, results) -> None:
+        """Save point cloud with random colors when no query is present."""
+        all_points = []
+        all_colors = []
+        object_colors = {}
+
+        # Get all IDs from collection
+        all_ids = [str(i) for i in range(self.collection.count())]
+
+        for i, metadata in enumerate(results["metadatas"]):
+            if metadata is None or any(k.startswith("dummy") for k in metadata.keys()):
+                continue
+
+            current_id = all_ids[i]
+            point_cloud = self.point_clouds.get(current_id)
+
+            if point_cloud is not None and len(point_cloud) > 0:
+                # Generate random color for this object if not already assigned
+                if current_id not in object_colors:
+                    hue = random.random()
+                    object_colors[current_id] = tuple(
+                        c / 255 for c in self._hsv_to_rgb(hue, 0.8, 0.8)
+                    )
+
+                color = np.array([object_colors[current_id]] * len(point_cloud))
+                all_points.extend(point_cloud)
+                all_colors.extend(color)
+
+        if all_points:
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(np.array(all_points))
+            pcd.colors = o3d.utility.Vector3dVector(np.array(all_colors))
+            o3d.io.write_point_cloud(output_path, pcd)
 
     def _hsv_to_rgb(self, h: float, s: float, v: float) -> Tuple[float, float, float]:
         """
@@ -610,3 +668,43 @@ class DatabaseWrapper:
             return t * 255, p * 255, v * 255
         if i == 5:
             return v * 255, p * 255, q * 255
+
+    def update_caption_async(self, object_id: str, caption_future: Future):
+        """Store pending caption future and set up callback for when it completes."""
+        self.pending_captions[object_id] = caption_future
+
+        def _update_caption(future):
+            try:
+                caption = future.result()
+                if caption:
+                    # Get existing metadata
+                    results = self.collection.get(
+                        ids=[object_id], include=["metadatas"]
+                    )
+                    metadata = results["metadatas"][0]
+
+                    # Update caption
+                    metadata["caption"] = caption
+
+                    # Update in database
+                    self.collection.update(
+                        ids=[object_id],
+                        metadatas=[metadata],
+                    )
+            except Exception as e:
+                print(f"Error updating caption for object {object_id}: {e}")
+            finally:
+                # Remove from pending captions
+                self.pending_captions.pop(object_id, None)
+
+        caption_future.add_done_callback(_update_caption)
+
+    def get_object_metadata(self, object_id: str) -> Dict:
+        """Get metadata for a specific object."""
+        try:
+            results = self.collection.get(ids=[object_id], include=["metadatas"])
+            if results and results["metadatas"]:
+                return results["metadatas"][0]
+        except Exception as e:
+            print(f"Error getting metadata for object {object_id}: {e}")
+        return {}
