@@ -8,8 +8,8 @@ import pybullet as p
 import pybullet_data
 from scipy.spatial.transform import Rotation
 
-from shepherd import Shepherd, ShepherdConfig
-from shepherd.utils.camera import CameraUtils
+from src.shepherd import Shepherd, ShepherdConfig
+from src.shepherd.utils.camera import CameraUtils
 
 
 class PyBulletShepherd:
@@ -62,7 +62,7 @@ class PyBulletShepherd:
         cv2.namedWindow("Shepherd View", cv2.WINDOW_NORMAL)
         
         # Create output directory
-        self.output_dir = os.path.join(os.getcwd(), "pybullet_output")
+        self.output_dir = os.path.join(os.getcwd(), "demo/pybullet_output")
         os.makedirs(self.output_dir, exist_ok=True)
         
         # Color mapping for visualization
