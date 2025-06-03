@@ -50,8 +50,8 @@ class Shepherd:
         self.segmenter = SAM(
             model_path=config.get("model_paths.sam", "FastSAM-s.pt"),
             device=self.device,
-            points_per_side=config.get("sam.points_per_side", 32),
-            pred_iou_thresh=config.get("sam.pred_iou_thresh", 0.88),
+            points_per_side=config.get("sam_params.points_per_side", 32),
+            pred_iou_thresh=config.get("sam_params.pred_iou_thresh", 0.88),
         )
 
         self.captioner = BLIP(
